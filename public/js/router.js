@@ -104,21 +104,21 @@ export function shell(contentHtml, { title = '', fab = null, active = '' } = {})
   const admin = isAdmin();
 
   return `
-    <div class="min-h-screen pb-28">
-      <header class="sticky top-0 z-30 px-4 pt-4 pb-2">
-        <div class="glass-strong rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
-          <div class="min-w-0">
-            <p class="font-display text-xl font-bold text-brand-800 tracking-tight">Carmina Store</p>
+    <div class="page-shell">
+      <header class="sticky top-0 z-30 px-4 pt-4 pb-2 page-header-inner">
+        <div class="glass-strong rounded-2xl px-4 py-3 flex items-center justify-between gap-3 max-w-full overflow-hidden">
+          <div class="min-w-0 flex-1 overflow-hidden">
+            <p class="font-display text-xl font-bold text-brand-800 tracking-tight truncate">Carmina Store</p>
             <p class="text-xs text-slate-500 truncate">${title}</p>
           </div>
-          <div class="hidden sm:block text-right">
+          <div class="hidden sm:block text-right shrink-0">
             <p class="text-sm font-semibold text-slate-700">${user?.USER || ''}</p>
             <p class="text-[10px] uppercase tracking-wide text-brand-700">${user?.TIPO || ''}</p>
           </div>
         </div>
       </header>
 
-      <main class="px-4 pt-3 max-w-5xl mx-auto">
+      <main class="page-main pt-3">
         ${contentHtml}
       </main>
 

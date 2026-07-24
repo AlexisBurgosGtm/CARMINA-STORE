@@ -41,15 +41,22 @@ function formatQ(n) {
   })}`;
 }
 
+function calcUtilidad(costo, precio, factor) {
+  const costoQtz = factor > 0 ? Number(costo || 0) / factor : 0;
+  const utilidad = Number(precio || 0) - costoQtz;
+  const pct = costoQtz > 0 ? (utilidad / costoQtz) * 100 : 0;
+  return { costoQtz, utilidad, pct };
+}
+
 function productForm(proveedores, product = null, factor = 2.2) {
   const isEdit = !!product;
   return `
     <div class="flex items-start justify-between gap-3 mb-4">
-      <div>
+      <div class="min-w-0">
         <h2 class="font-display text-xl font-bold text-brand-900">${isEdit ? 'Editar producto' : 'Nuevo producto'}</h2>
         <p class="text-sm text-slate-500">Datos del catálogo</p>
       </div>
-      <button id="modal-close" class="btn btn-ghost btn-icon"><i class="fa-solid fa-xmark"></i></button>
+      <button id="modal-close" class="btn btn-ghost btn-icon shrink-0"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <form id="product-form" class="space-y-3" autocomplete="off" data-factor="${esc(factor)}">
       <div>
@@ -78,11 +85,14 @@ function productForm(proveedores, product = null, factor = 2.2) {
         </select>
       </div>
       <div class="money-row">
-        <div>
+        <div class="costo-block">
           <label class="label">Costo</label>
-          <div class="money-input">
-            <span class="money-prefix" title="Pesos">$</span>
-            <input id="input-costo" name="COSTO" type="number" step="0.01" min="0" class="input-field" required autocomplete="off" value="${esc(product?.COSTO ?? '')}" />
+          <div class="costo-line">
+            <div class="money-input">
+              <span class="money-prefix" title="Pesos">$</span>
+              <input id="input-costo" name="COSTO" type="number" step="0.01" min="0" class="input-field" required autocomplete="off" value="${esc(product?.COSTO ?? '')}" />
+            </div>
+            <span id="costo-qtz" class="costo-qtz" title="Costo ÷ factor">Q 0.00</span>
           </div>
         </div>
         <div>
@@ -116,16 +126,13 @@ function bindUtilidadCalc(factor) {
   const precioInput = document.getElementById('input-precio');
   const montoEl = document.getElementById('utilidad-monto');
   const pctEl = document.getElementById('utilidad-pct');
+  const costoQtzEl = document.getElementById('costo-qtz');
   if (!costoInput || !precioInput || !montoEl || !pctEl) return;
 
   const recalc = () => {
-    const costo = Number(costoInput.value) || 0;
-    const precio = Number(precioInput.value) || 0;
-    // Costo en quetzales = costo (pesos) ÷ factor de cambio
-    const costoQtz = factor > 0 ? costo / factor : 0;
-    const utilidad = precio - costoQtz;
-    const pct = costoQtz > 0 ? (utilidad / costoQtz) * 100 : 0;
+    const { costoQtz, utilidad, pct } = calcUtilidad(costoInput.value, precioInput.value, factor);
 
+    if (costoQtzEl) costoQtzEl.textContent = formatQ(costoQtz);
     montoEl.textContent = formatQ(utilidad);
     montoEl.style.color = utilidad < 0 ? '#dc2626' : '#134e4a';
     pctEl.textContent = `${pct.toLocaleString('es-GT', {
@@ -467,8 +474,12 @@ export async function renderCatalogo(el) {
     bindShell(() => {});
 
     let productos = [];
+    let factor = 2.2;
     try {
-      productos = await api.productos.list();
+      [productos, factor] = await Promise.all([
+        api.productos.list(),
+        loadFactorCambio(),
+      ]);
     } catch (err) {
       toast(err.message, 'error');
       el.innerHTML = shell(`
@@ -498,27 +509,38 @@ export async function renderCatalogo(el) {
     }
 
     const list = productos.length
-      ? productos.map((p) => `
-        <article class="data-row p-3 sm:p-4 flex items-center gap-3" data-cod="${esc(p.CODPROD)}">
-          <button class="btn-view shrink-0" title="Ver foto">
-            ${p.FOTO
-              ? `<img class="thumb" src="${api.productos.fotoUrl(p.CODPROD)}" alt="" onerror="this.outerHTML='<div class=\\'thumb flex items-center justify-center text-brand-700\\'><i class=\\'fa-solid fa-box\\'></i></div>'" />`
-              : `<div class="thumb flex items-center justify-center text-brand-700"><i class="fa-solid fa-box"></i></div>`}
-          </button>
-          <div class="min-w-0 flex-1">
-            <p class="font-semibold text-slate-800 truncate">${esc(p.DESPROD)}</p>
-            <p class="text-xs text-slate-500 truncate">${esc(p.CODPROD)} · ${esc(p.NOMPROV || p.CODPROV)}</p>
-            <p class="text-sm font-bold text-brand-700 mt-0.5">${formatQ(p.PRECIO)}</p>
-            <p class="text-[10px] text-slate-400">Act. ${formatDate(p.LASTUPDATE)}</p>
+      ? productos.map((p) => {
+        const { utilidad, pct } = calcUtilidad(p.COSTO, p.PRECIO, factor);
+        const pctTxt = `${pct.toLocaleString('es-GT', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+        return `
+        <article class="data-row p-3 sm:p-4" data-cod="${esc(p.CODPROD)}">
+          <div class="product-row">
+            <div class="product-row-top">
+              <button class="btn-view shrink-0" title="Ver foto">
+                ${p.FOTO
+                  ? `<img class="thumb" src="${api.productos.fotoUrl(p.CODPROD)}" alt="" onerror="this.outerHTML='<div class=\\'thumb flex items-center justify-center text-brand-700\\'><i class=\\'fa-solid fa-box\\'></i></div>'" />`
+                  : `<div class="thumb flex items-center justify-center text-brand-700"><i class="fa-solid fa-box"></i></div>`}
+              </button>
+              <div class="product-row-info">
+                <p class="font-semibold text-slate-800 break-words">${esc(p.DESPROD)}</p>
+                <p class="text-xs text-slate-500 truncate">${esc(p.CODPROD)} · ${esc(p.NOMPROV || p.CODPROV)}</p>
+                <div class="product-meta">
+                  <span class="text-sm font-bold text-brand-700">${formatQ(p.PRECIO)}</span>
+                  <span class="product-util">Utilidad: ${formatQ(utilidad)}</span>
+                  <span class="product-util-pct">${pctTxt}</span>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-0.5">Act. ${formatDate(p.LASTUPDATE)}</p>
+              </div>
+            </div>
+            <div class="product-row-actions">
+              <button class="btn btn-ghost btn-icon btn-view" title="Ver"><i class="fa-solid fa-eye"></i></button>
+              <button class="btn btn-ghost btn-icon btn-cotizar-row" title="Cotizar Gemini"><i class="fa-solid fa-robot"></i></button>
+              <button class="btn btn-ghost btn-icon btn-edit" title="Editar"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn btn-danger btn-icon btn-del" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+            </div>
           </div>
-          <div class="flex flex-row flex-nowrap gap-1 shrink-0">
-            <button class="btn btn-ghost btn-icon btn-view" title="Ver"><i class="fa-solid fa-eye"></i></button>
-            <button class="btn btn-ghost btn-icon btn-cotizar-row" title="Cotizar Gemini"><i class="fa-solid fa-robot"></i></button>
-            <button class="btn btn-ghost btn-icon btn-edit" title="Editar"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn btn-danger btn-icon btn-del" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
-          </div>
-        </article>
-      `).join('')
+        </article>`;
+      }).join('')
       : `<div class="empty-state glass rounded-3xl"><i class="fa-solid fa-box-open text-3xl mb-3 text-brand-500"></i><p>No hay productos aún</p><p class="text-sm mt-1">Usa el botón + para agregar</p></div>`;
 
     el.innerHTML = shell(`
