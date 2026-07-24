@@ -1,0 +1,12 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Carmina Store">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f766e"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+  <path fill="#ffffff" d="M128 176h256l-24 176c-3 22-22 40-44 40H196c-22 0-41-18-44-40L128 176zm48-48c0-26 22-48 48-48h64c26 0 48 22 48 48v16h-32v-16c0-9-7-16-16-16h-64c-9 0-16 7-16 16v16h-32v-16z"/>
+  <circle cx="200" cy="280" r="18" fill="#ccfbf1"/>
+  <circle cx="312" cy="280" r="18" fill="#ccfbf1"/>
+</svg>

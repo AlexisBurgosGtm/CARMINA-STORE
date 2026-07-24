@@ -1,0 +1,95 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f766e" />
+  <meta name="description" content="Carmina Store - Catálogo y cotizaciones" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Carmina Store</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" media="print" onload="this.media='all'" />
+  <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" /></noscript>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+  <style>
+    body { margin: 0; font-family: "DM Sans", system-ui, sans-serif; color: #1e293b; }
+    #app:empty::before {
+      content: "Cargando Carmina Store...";
+      display: block;
+      padding: 2rem;
+      text-align: center;
+      color: #0f766e;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body class="font-body text-slate-800 antialiased">
+  <div id="app">
+    <div class="min-h-screen grid place-items-center p-6" style="min-height:100vh;display:grid;place-items:center;padding:1.5rem;">
+      <div class="text-center">
+        <p class="font-display text-2xl font-bold text-brand-800" style="font-size:1.5rem;font-weight:800;color:#115e59;margin:0;">Carmina Store</p>
+        <p class="text-slate-500 mt-2" style="color:#64748b;margin-top:0.5rem;">Cargando...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast-container" class="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+  <div id="modal-stack"></div>
+
+  <script type="module" src="/js/app.js"></script>
+  <script>
+    window.__tailwindReady = function () {
+      if (window.tailwind) {
+        tailwind.config = {
+          theme: {
+            extend: {
+              colors: {
+                brand: {
+                  50: '#f0fdfa',
+                  100: '#ccfbf1',
+                  500: '#14b8a6',
+                  600: '#0d9488',
+                  700: '#0f766e',
+                  800: '#115e59',
+                  900: '#134e4a',
+                }
+              },
+              fontFamily: {
+                display: ['"Outfit"', 'system-ui', 'sans-serif'],
+                body: ['"DM Sans"', 'system-ui', 'sans-serif'],
+              }
+            }
+          }
+        };
+      }
+    };
+  </script>
+  <script src="https://cdn.tailwindcss.com" onload="window.__tailwindReady && window.__tailwindReady()"></script>
+  <script>
+    // Limpia SW/cachés viejos que puedan devolver HTML a módulos .js
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async () => {
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((r) => r.unregister()));
+          if (window.caches) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map((k) => caches.delete(k)));
+          }
+        } catch (_) { /* ignore */ }
+        navigator.serviceWorker.register('/sw.js?v=2').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
