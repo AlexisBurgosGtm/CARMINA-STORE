@@ -456,8 +456,101 @@ function openProductEditor(proveedores, product = null) {
 }
 
 let _reloadCatalogo = null;
+let _catalogFilters = { proveedor: '', q: '' };
+
 function handleReloadCatalogo() {
   _reloadCatalogo?.();
+}
+
+function filterProductos(productos, { proveedor, q }) {
+  const query = String(q || '').trim().toLowerCase();
+  return productos.filter((p) => {
+    if (proveedor && String(p.CODPROV) !== String(proveedor)) return false;
+    if (!query) return true;
+    const haystack = [
+      p.CODPROD,
+      p.DESPROD,
+      p.NOMPROV,
+      p.CODPROV,
+    ].map((v) => String(v || '').toLowerCase()).join(' ');
+    return haystack.includes(query);
+  });
+}
+
+function productListHtml(productos, factor) {
+  if (!productos.length) {
+    return `<div class="empty-state glass rounded-3xl" id="catalog-empty">
+      <i class="fa-solid fa-box-open text-3xl mb-3 text-brand-500"></i>
+      <p>No hay productos que coincidan</p>
+      <p class="text-sm mt-1">Prueba otro proveedor o texto de búsqueda</p>
+    </div>`;
+  }
+
+  return productos.map((p) => {
+    const { utilidad, pct } = calcUtilidad(p.COSTO, p.PRECIO, factor);
+    const pctTxt = `${pct.toLocaleString('es-GT', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+    return `
+    <article class="data-row p-3 sm:p-4" data-cod="${esc(p.CODPROD)}">
+      <div class="product-row">
+        <div class="product-row-top">
+          <button class="btn-view shrink-0" title="Ver foto">
+            ${p.FOTO
+              ? `<img class="thumb" src="${api.productos.fotoUrl(p.CODPROD)}" alt="" onerror="this.outerHTML='<div class=\\'thumb flex items-center justify-center text-brand-700\\'><i class=\\'fa-solid fa-box\\'></i></div>'" />`
+              : `<div class="thumb flex items-center justify-center text-brand-700"><i class="fa-solid fa-box"></i></div>`}
+          </button>
+          <div class="product-row-info">
+            <p class="font-semibold text-slate-800 break-words">${esc(p.DESPROD)}</p>
+            <p class="text-xs text-slate-500 truncate">${esc(p.CODPROD)} · ${esc(p.NOMPROV || p.CODPROV)}</p>
+            <div class="product-meta">
+              <span class="text-sm font-bold text-brand-700">${formatQ(p.PRECIO)}</span>
+              <span class="product-util">Utilidad: ${formatQ(utilidad)}</span>
+              <span class="product-util-pct">${pctTxt}</span>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-0.5">Act. ${formatDate(p.LASTUPDATE)}</p>
+          </div>
+        </div>
+        <div class="product-row-actions">
+          <button class="btn btn-ghost btn-icon btn-view" title="Ver"><i class="fa-solid fa-eye"></i></button>
+          <button class="btn btn-ghost btn-icon btn-cotizar-row" title="Cotizar Gemini"><i class="fa-solid fa-robot"></i></button>
+          <button class="btn btn-ghost btn-icon btn-edit" title="Editar"><i class="fa-solid fa-pen"></i></button>
+          <button class="btn btn-danger btn-icon btn-del" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </div>
+    </article>`;
+  }).join('');
+}
+
+function bindProductRowActions(el, productos, paint) {
+  el.querySelectorAll('.data-row').forEach((row) => {
+    const cod = row.dataset.cod;
+    const product = productos.find((p) => p.CODPROD === cod);
+    if (!product) return;
+
+    row.querySelectorAll('.btn-view').forEach((btn) => {
+      btn.addEventListener('click', () => showProductModal(product));
+    });
+
+    row.querySelector('.btn-cotizar-row')?.addEventListener('click', () => cotizar(product));
+
+    row.querySelector('.btn-edit')?.addEventListener('click', async () => {
+      const proveedores = await loadProveedores();
+      openProductEditor(proveedores, product);
+    });
+
+    row.querySelector('.btn-del')?.addEventListener('click', async () => {
+      const ok = await confirmDeleteWithClave(
+        `¿Eliminar el producto ${cod}? También se eliminará su foto en WebDAV.`
+      );
+      if (!ok) return;
+      try {
+        await api.productos.remove(cod);
+        toast('Producto eliminado', 'success');
+        paint();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
+  });
 }
 
 export async function renderCatalogo(el) {
@@ -474,10 +567,12 @@ export async function renderCatalogo(el) {
     bindShell(() => {});
 
     let productos = [];
+    let proveedores = [];
     let factor = 2.2;
     try {
-      [productos, factor] = await Promise.all([
+      [productos, proveedores, factor] = await Promise.all([
         api.productos.list(),
+        loadProveedores(),
         loadFactorCambio(),
       ]);
     } catch (err) {
@@ -494,12 +589,12 @@ export async function renderCatalogo(el) {
       `, { title: 'Productos', fab: true, active: 'catalogo' });
       bindShell(async () => {
         try {
-          const proveedores = await loadProveedores();
-          if (!proveedores.length) {
+          const provs = await loadProveedores();
+          if (!provs.length) {
             toast('Primero registra al menos un proveedor', 'info');
             return;
           }
-          openProductEditor(proveedores);
+          openProductEditor(provs);
         } catch (e) {
           toast(e.message, 'error');
         }
@@ -508,91 +603,96 @@ export async function renderCatalogo(el) {
       return;
     }
 
-    const list = productos.length
-      ? productos.map((p) => {
-        const { utilidad, pct } = calcUtilidad(p.COSTO, p.PRECIO, factor);
-        const pctTxt = `${pct.toLocaleString('es-GT', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-        return `
-        <article class="data-row p-3 sm:p-4" data-cod="${esc(p.CODPROD)}">
-          <div class="product-row">
-            <div class="product-row-top">
-              <button class="btn-view shrink-0" title="Ver foto">
-                ${p.FOTO
-                  ? `<img class="thumb" src="${api.productos.fotoUrl(p.CODPROD)}" alt="" onerror="this.outerHTML='<div class=\\'thumb flex items-center justify-center text-brand-700\\'><i class=\\'fa-solid fa-box\\'></i></div>'" />`
-                  : `<div class="thumb flex items-center justify-center text-brand-700"><i class="fa-solid fa-box"></i></div>`}
-              </button>
-              <div class="product-row-info">
-                <p class="font-semibold text-slate-800 break-words">${esc(p.DESPROD)}</p>
-                <p class="text-xs text-slate-500 truncate">${esc(p.CODPROD)} · ${esc(p.NOMPROV || p.CODPROV)}</p>
-                <div class="product-meta">
-                  <span class="text-sm font-bold text-brand-700">${formatQ(p.PRECIO)}</span>
-                  <span class="product-util">Utilidad: ${formatQ(utilidad)}</span>
-                  <span class="product-util-pct">${pctTxt}</span>
-                </div>
-                <p class="text-[10px] text-slate-400 mt-0.5">Act. ${formatDate(p.LASTUPDATE)}</p>
-              </div>
-            </div>
-            <div class="product-row-actions">
-              <button class="btn btn-ghost btn-icon btn-view" title="Ver"><i class="fa-solid fa-eye"></i></button>
-              <button class="btn btn-ghost btn-icon btn-cotizar-row" title="Cotizar Gemini"><i class="fa-solid fa-robot"></i></button>
-              <button class="btn btn-ghost btn-icon btn-edit" title="Editar"><i class="fa-solid fa-pen"></i></button>
-              <button class="btn btn-danger btn-icon btn-del" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
-            </div>
-          </div>
-        </article>`;
-      }).join('')
-      : `<div class="empty-state glass rounded-3xl"><i class="fa-solid fa-box-open text-3xl mb-3 text-brand-500"></i><p>No hay productos aún</p><p class="text-sm mt-1">Usa el botón + para agregar</p></div>`;
+    const openCreate = async () => {
+      try {
+        const provs = proveedores.length ? proveedores : await loadProveedores();
+        if (!provs.length) {
+          toast('Primero registra al menos un proveedor', 'info');
+          return;
+        }
+        openProductEditor(provs);
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    };
+
+    if (!productos.length) {
+      el.innerHTML = shell(`
+        <div class="mb-4">
+          <h1 class="font-display text-2xl font-bold text-brand-900">Catálogo</h1>
+          <p class="text-sm text-slate-500">0 producto(s)</p>
+        </div>
+        <div class="empty-state glass rounded-3xl">
+          <i class="fa-solid fa-box-open text-3xl mb-3 text-brand-500"></i>
+          <p>No hay productos aún</p>
+          <p class="text-sm mt-1">Usa el botón + para agregar</p>
+        </div>
+      `, { title: 'Productos', fab: true, active: 'catalogo' });
+      bindShell(openCreate);
+      return;
+    }
+
+    const proveedorOptions = [
+      `<option value="">Todos</option>`,
+      ...proveedores.map((p) => `
+        <option value="${esc(p.CODPROV)}" ${String(_catalogFilters.proveedor) === String(p.CODPROV) ? 'selected' : ''}>
+          ${esc(p.NOMPROV)}
+        </option>`),
+    ].join('');
+
+    const filtered = filterProductos(productos, _catalogFilters);
 
     el.innerHTML = shell(`
       <div class="mb-4">
         <h1 class="font-display text-2xl font-bold text-brand-900">Catálogo</h1>
-        <p class="text-sm text-slate-500">${productos.length} producto(s)</p>
+        <p class="text-sm text-slate-500" id="catalog-count">${filtered.length} de ${productos.length} producto(s)</p>
       </div>
-      <div class="space-y-2">${list}</div>
+      <div class="catalog-filters mb-3">
+        <div class="catalog-filter-prov">
+          <label class="label" for="filter-proveedor">Proveedor</label>
+          <select id="filter-proveedor" class="input-field" autocomplete="off">
+            ${proveedorOptions}
+          </select>
+        </div>
+        <div class="catalog-filter-search">
+          <label class="label" for="filter-buscar">Buscar</label>
+          <div class="catalog-search-wrap">
+            <i class="fa-solid fa-magnifying-glass catalog-search-icon" aria-hidden="true"></i>
+            <input id="filter-buscar" class="input-field catalog-search-input" type="search"
+              placeholder="Código, descripción..." autocomplete="off"
+              value="${esc(_catalogFilters.q)}" />
+          </div>
+        </div>
+      </div>
+      <div class="space-y-2" id="product-list">${productListHtml(filtered, factor)}</div>
     `, { title: 'Productos', fab: true, active: 'catalogo' });
 
-    bindShell(async () => {
-      try {
-        const proveedores = await loadProveedores();
-        if (!proveedores.length) {
-          toast('Primero registra al menos un proveedor', 'info');
-          return;
-        }
-        openProductEditor(proveedores);
-      } catch (err) {
-        toast(err.message, 'error');
+    bindShell(openCreate);
+
+    const listEl = document.getElementById('product-list');
+    const countEl = document.getElementById('catalog-count');
+    const provSelect = document.getElementById('filter-proveedor');
+    const searchInput = document.getElementById('filter-buscar');
+
+    const applyFilters = () => {
+      _catalogFilters = {
+        proveedor: provSelect?.value || '',
+        q: searchInput?.value || '',
+      };
+      const next = filterProductos(productos, _catalogFilters);
+      if (listEl) {
+        listEl.innerHTML = productListHtml(next, factor);
+        bindProductRowActions(listEl, productos, paint);
       }
-    });
+      if (countEl) {
+        countEl.textContent = `${next.length} de ${productos.length} producto(s)`;
+      }
+    };
 
-    el.querySelectorAll('.data-row').forEach((row) => {
-      const cod = row.dataset.cod;
-      const product = productos.find((p) => p.CODPROD === cod);
+    provSelect?.addEventListener('change', applyFilters);
+    searchInput?.addEventListener('input', applyFilters);
 
-      row.querySelectorAll('.btn-view').forEach((btn) => {
-        btn.addEventListener('click', () => showProductModal(product));
-      });
-
-      row.querySelector('.btn-cotizar-row')?.addEventListener('click', () => cotizar(product));
-
-      row.querySelector('.btn-edit')?.addEventListener('click', async () => {
-        const proveedores = await loadProveedores();
-        openProductEditor(proveedores, product);
-      });
-
-      row.querySelector('.btn-del')?.addEventListener('click', async () => {
-        const ok = await confirmDeleteWithClave(
-          `¿Eliminar el producto ${cod}? También se eliminará su foto en WebDAV.`
-        );
-        if (!ok) return;
-        try {
-          await api.productos.remove(cod);
-          toast('Producto eliminado', 'success');
-          paint();
-        } catch (err) {
-          toast(err.message, 'error');
-        }
-      });
-    });
+    bindProductRowActions(listEl || el, productos, paint);
   }
 
   _reloadCatalogo = paint;

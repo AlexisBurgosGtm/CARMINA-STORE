@@ -1,18 +1,35 @@
 require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { query } = require('./db');
+const {
+  DEFAULT_GEMINI_MODEL,
+  SETTING_MODELO,
+  isAllowedGeminiModel,
+} = require('./gemini-models');
 
-/** Modelo actual (gemini-2.0-flash está retirado / sin cuota free) */
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+async function getConfiguredGeminiModel() {
+  try {
+    const rows = await query('SELECT VALOR FROM SETTINGS WHERE OPCION = ?', [SETTING_MODELO]);
+    const fromDb = rows[0]?.VALOR?.trim();
+    if (fromDb && isAllowedGeminiModel(fromDb)) return fromDb;
+    if (fromDb) return fromDb; // permitir modelos custom guardados
+  } catch (_) {
+    /* ignore */
+  }
+  const fromEnv = (process.env.GEMINI_MODEL || '').trim();
+  if (fromEnv) return fromEnv;
+  return DEFAULT_GEMINI_MODEL;
+}
 
-function friendlyGeminiError(err) {
+function friendlyGeminiError(err, modelName) {
   const msg = String(err?.message || err || '');
   const status = err?.status || err?.statusCode;
 
   if (status === 429 || /quota|rate.?limit|exceeded your current quota/i.test(msg)) {
-    return 'Cuota de Gemini agotada o sin acceso free para este modelo. Revisa billing/límites en https://ai.dev/rate-limit';
+    return `Cuota de Gemini agotada para el modelo "${modelName}". Prueba otro en Configuraciones o revisa https://ai.dev/rate-limit`;
   }
   if (status === 404 || /no longer available|not found|is not found/i.test(msg)) {
-    return `Modelo Gemini no disponible (${GEMINI_MODEL}). Prueba actualizar GEMINI_MODEL en .env`;
+    return `Modelo Gemini no disponible (${modelName}). Elige otro en Configuraciones → MODELO GEMINI`;
   }
   if (status === 401 || status === 403 || /API_KEY|invalid|permission/i.test(msg)) {
     return 'API key de Gemini inválida o sin permisos';
@@ -26,8 +43,9 @@ async function cotizarProducto(descripcion) {
     throw new Error('GEMINI_API_KEY no configurada');
   }
 
+  const modelName = await getConfiguredGeminiModel();
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+  const model = genAI.getGenerativeModel({ model: modelName });
 
   const prompt = `Eres un asistente de cotización de precios en México.
 Cotiza el siguiente producto en al menos 10 tiendas distintas del país México (pueden ser cadenas físicas u online conocidas: Liverpool, Walmart, Amazon México, Mercado Libre, Coppel, Elektra, Best Buy, Sam's Club, Costco, Home Depot, Office Depot, Soriana, Chedraui, etc.).
@@ -60,8 +78,8 @@ Usa precios realistas aproximados en pesos mexicanos (MXN) basados en tu conocim
   try {
     result = await model.generateContent(prompt);
   } catch (err) {
-    console.error('Gemini error:', err?.message || err);
-    throw new Error(friendlyGeminiError(err));
+    console.error('Gemini error:', modelName, err?.message || err);
+    throw new Error(friendlyGeminiError(err, modelName));
   }
 
   const text = result.response.text().trim();
@@ -81,4 +99,4 @@ Usa precios realistas aproximados en pesos mexicanos (MXN) basados en tu conocim
   }
 }
 
-module.exports = { cotizarProducto, GEMINI_MODEL };
+module.exports = { cotizarProducto, getConfiguredGeminiModel };

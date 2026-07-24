@@ -88,6 +88,18 @@ async function initDatabase() {
     console.log('Setting CLAVE VERIFICACIONES creado.');
   }
 
+  const modelo = await query('SELECT OPCION FROM SETTINGS WHERE OPCION = ?', [
+    'MODELO GEMINI',
+  ]);
+  if (!modelo.length) {
+    const defaultModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+    await query('INSERT INTO SETTINGS (OPCION, VALOR) VALUES (?, ?)', [
+      'MODELO GEMINI',
+      defaultModel,
+    ]);
+    console.log('Setting MODELO GEMINI creado.');
+  }
+
   // Super usuario
   const existing = await query('SELECT `USER` FROM USUARIOS WHERE `USER` = ?', [SUPER_USER.USER]);
   if (!existing.length) {

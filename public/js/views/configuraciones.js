@@ -23,8 +23,14 @@ export async function renderConfiguraciones(el) {
     bindShell(null);
 
     let settings = [];
+    let geminiModels = [];
     try {
-      settings = await api.settings.list();
+      const [settingsRes, modelsRes] = await Promise.all([
+        api.settings.list(),
+        api.settings.geminiModels(),
+      ]);
+      settings = settingsRes;
+      geminiModels = modelsRes.models || [];
     } catch (err) {
       toast(err.message, 'error');
       el.innerHTML = shell(`
@@ -44,17 +50,35 @@ export async function renderConfiguraciones(el) {
     const cards = settings.length
       ? settings.map((s) => {
         const isSecret = s.OPCION === 'CLAVE VERIFICACIONES' || s.secreta;
+        const isGeminiModel = s.OPCION === 'MODELO GEMINI';
+
+        let controlHtml = '';
+        if (isGeminiModel) {
+          const options = geminiModels.map((m) => `
+            <option value="${esc(m.id)}" ${s.VALOR === m.id ? 'selected' : ''}>
+              ${esc(m.label || m.id)}
+            </option>`).join('');
+          controlHtml = `
+            <select name="VALOR" class="input-field flex-1" required autocomplete="off">
+              ${options}
+            </select>`;
+        } else {
+          controlHtml = `
+            <input name="VALOR" class="input-field flex-1"
+              type="${isSecret ? 'password' : 'text'}"
+              autocomplete="${isSecret ? 'new-password' : 'off'}"
+              placeholder="${isSecret ? 'Nueva clave (no se muestra la actual)' : ''}"
+              value="${isSecret ? '' : esc(s.VALOR)}"
+              required />`;
+        }
+
         return `
         <article class="data-row p-4 sm:p-5" data-opcion="${esc(s.OPCION)}">
           <form class="setting-form space-y-3" autocomplete="off">
             <label class="label">${esc(s.OPCION)}</label>
+            ${isGeminiModel ? `<p class="text-xs text-slate-500 -mt-1">Modelo usado en cotizaciones con Gemini</p>` : ''}
             <div class="flex flex-col sm:flex-row gap-2">
-              <input name="VALOR" class="input-field flex-1"
-                type="${isSecret ? 'password' : 'text'}"
-                autocomplete="${isSecret ? 'new-password' : 'off'}"
-                placeholder="${isSecret ? 'Nueva clave (no se muestra la actual)' : ''}"
-                value="${isSecret ? '' : esc(s.VALOR)}"
-                required />
+              ${controlHtml}
               <button type="submit" class="btn btn-primary sm:px-5">
                 <i class="fa-solid fa-floppy-disk"></i> Actualizar
               </button>

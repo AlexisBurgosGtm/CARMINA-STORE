@@ -127,6 +127,7 @@ export const api = {
       request(`/settings/${encodeURIComponent(opcion)}`, { method: 'PUT', body }),
     verificarClave: (clave) =>
       request('/settings/verificar-clave', { method: 'POST', body: { clave } }),
+    geminiModels: () => request('/settings/gemini-models'),
   },
 };
 

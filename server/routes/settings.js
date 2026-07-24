@@ -1,6 +1,11 @@
 const express = require('express');
 const { query } = require('../db');
 const { authRequired } = require('../middleware/auth');
+const {
+  GEMINI_MODELS,
+  SETTING_MODELO,
+  isAllowedGeminiModel,
+} = require('../gemini-models');
 
 const router = express.Router();
 router.use(authRequired);
@@ -10,7 +15,6 @@ const SECRET_OPTION = 'CLAVE VERIFICACIONES';
 router.get('/', async (_req, res) => {
   try {
     const rows = await query('SELECT OPCION, VALOR FROM SETTINGS ORDER BY OPCION');
-    // No exponer la clave en claro al listar
     const safe = rows.map((r) =>
       r.OPCION === SECRET_OPTION ? { OPCION: r.OPCION, VALOR: '', secreta: true } : r
     );
@@ -19,6 +23,10 @@ router.get('/', async (_req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Error al listar configuraciones' });
   }
+});
+
+router.get('/gemini-models', (_req, res) => {
+  res.json({ models: GEMINI_MODELS, setting: SETTING_MODELO });
 });
 
 router.post('/verificar-clave', async (req, res) => {
@@ -62,17 +70,23 @@ router.put('/:opcion', async (req, res) => {
       return res.status(400).json({ error: 'VALOR es requerido' });
     }
 
+    const valor = String(VALOR).trim();
+
+    if (opcion === SETTING_MODELO && !isAllowedGeminiModel(valor)) {
+      return res.status(400).json({
+        error: 'Modelo Gemini no permitido',
+        models: GEMINI_MODELS.map((m) => m.id),
+      });
+    }
+
     const rows = await query('SELECT OPCION FROM SETTINGS WHERE OPCION = ?', [opcion]);
     if (!rows.length) return res.status(404).json({ error: 'Opción no encontrada' });
 
-    await query('UPDATE SETTINGS SET VALOR = ? WHERE OPCION = ?', [
-      String(VALOR).trim(),
-      opcion,
-    ]);
+    await query('UPDATE SETTINGS SET VALOR = ? WHERE OPCION = ?', [valor, opcion]);
     res.json({
       ok: true,
       OPCION: opcion,
-      VALOR: opcion === SECRET_OPTION ? '' : String(VALOR).trim(),
+      VALOR: opcion === SECRET_OPTION ? '' : valor,
     });
   } catch (err) {
     console.error(err);

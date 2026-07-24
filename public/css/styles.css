@@ -481,6 +481,57 @@ img, video, canvas, svg {
   flex: 1;
 }
 
+/* Catálogo: filtros */
+.catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+}
+
+.catalog-filter-prov {
+  flex: 1 1 11rem;
+  min-width: 0;
+}
+
+.catalog-filter-search {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.catalog-search-wrap {
+  position: relative;
+}
+
+.catalog-search-icon {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+.catalog-search-input {
+  padding-left: 2.35rem !important;
+}
+
+@media (min-width: 640px) {
+  .catalog-filter-prov {
+    flex: 0 1 16rem;
+    max-width: 18rem;
+  }
+
+  .catalog-filter-search {
+    flex: 1 1 auto;
+    margin-left: auto;
+    max-width: 22rem;
+  }
+}
+
 /* Producto: layout móvil / desktop */
 .product-row {
   display: flex;
