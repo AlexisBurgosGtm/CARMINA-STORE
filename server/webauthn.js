@@ -7,7 +7,7 @@ const {
 
 const RP_NAME = 'Carmina Store';
 
-/** challengeId -> { challenge, user, type, expires } */
+/** challengeKey -> { challenge, user?, type, expires } */
 const challenges = new Map();
 
 function pruneChallenges() {
@@ -27,6 +27,15 @@ function takeChallenge(key) {
   const row = challenges.get(key);
   challenges.delete(key);
   return row || null;
+}
+
+function takeAuthChallengeByValue(challenge) {
+  pruneChallenges();
+  const key = `auth:${challenge}`;
+  const row = challenges.get(key);
+  if (!row || row.type !== 'authentication') return null;
+  challenges.delete(key);
+  return row;
 }
 
 function getRpFromRequest(req) {
@@ -62,12 +71,12 @@ async function buildRegistrationOptions(req, username, existingCred) {
     userDisplayName: username,
     userID,
     attestationType: 'none',
-    excludeCredentials: existingCred
-      ? [{ id: existingCred.id, transports: existingCred.transports }]
-      : [],
+    excludeCredentials: [],
     authenticatorSelection: {
       authenticatorAttachment: 'platform',
-      residentKey: 'preferred',
+      // Credencial descubrible: login solo con biometría, sin usuario
+      residentKey: 'required',
+      requireResidentKey: true,
       userVerification: 'preferred',
     },
   });
@@ -111,45 +120,32 @@ async function verifyRegistration(req, username, response) {
   };
 }
 
-async function buildAuthenticationOptions(req, username, existingCred) {
+/** Login sin usuario: el dispositivo elige la passkey asociada */
+async function buildDiscoverableAuthOptions(req) {
   const { rpID } = getRpFromRequest(req);
-  if (!existingCred) {
-    throw new Error('Este usuario aún no tiene biometría registrada');
-  }
 
   const options = await generateAuthenticationOptions({
     rpID,
-    allowCredentials: [
-      {
-        id: existingCred.id,
-        transports: existingCred.transports,
-      },
-    ],
     userVerification: 'preferred',
   });
 
-  saveChallenge(`auth:${username}`, {
+  saveChallenge(`auth:${options.challenge}`, {
     challenge: options.challenge,
-    user: username,
     type: 'authentication',
   });
 
   return options;
 }
 
-async function verifyAuthentication(req, username, response, existingCred) {
+async function verifyDiscoverableAuth(req, response, existingCred) {
   const { rpID, origin } = getRpFromRequest(req);
-  const stored = takeChallenge(`auth:${username}`);
-  if (!stored || stored.type !== 'authentication') {
-    throw new Error('Desafío WebAuthn expirado o inválido. Intenta de nuevo.');
-  }
   if (!existingCred) {
     throw new Error('Credencial biométrica no encontrada');
   }
 
   const verification = await verifyAuthenticationResponse({
     response,
-    expectedChallenge: stored.challenge,
+    expectedChallenge: (challenge) => !!takeAuthChallengeByValue(challenge),
     expectedOrigin: origin,
     expectedRPID: rpID,
     requireUserVerification: false,
@@ -176,6 +172,6 @@ module.exports = {
   parseCredential,
   buildRegistrationOptions,
   verifyRegistration,
-  buildAuthenticationOptions,
-  verifyAuthentication,
+  buildDiscoverableAuthOptions,
+  verifyDiscoverableAuth,
 };

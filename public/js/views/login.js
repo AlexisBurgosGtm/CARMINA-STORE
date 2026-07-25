@@ -10,16 +10,18 @@ function decoyAutofillTrap() {
     </div>`;
 }
 
-async function maybeRegisterWebauthn() {
+async function maybeRegisterWebauthn(alreadyRegistered = false) {
   if (!webauthnSupported()) return;
 
   const ask = await window.Swal?.fire({
     icon: 'question',
-    title: '¿Activar biometría?',
-    text: 'Podrás iniciar sesión con huella, Face ID o el desbloqueo de este dispositivo.',
+    title: alreadyRegistered ? '¿Actualizar biometría?' : '¿Activar biometría?',
+    text: alreadyRegistered
+      ? 'Si el acceso biométrico no funciona, actualízalo para entrar solo con tu dispositivo (sin usuario ni contraseña).'
+      : 'La próxima vez podrás entrar solo con huella, Face ID o el desbloqueo de este dispositivo, sin escribir usuario ni contraseña.',
     showCancelButton: true,
-    confirmButtonText: 'Activar',
-    cancelButtonText: 'Ahora no',
+    confirmButtonText: alreadyRegistered ? 'Actualizar' : 'Activar',
+    cancelButtonText: alreadyRegistered ? 'No, gracias' : 'Ahora no',
     confirmButtonColor: '#0f766e',
     cancelButtonColor: '#94a3b8',
   });
@@ -30,7 +32,7 @@ async function maybeRegisterWebauthn() {
     const options = await api.webauthn.registerOptions();
     const credential = await startRegistration(options);
     await api.webauthn.registerVerify(credential);
-    toast('Biometría activada para este usuario', 'success');
+    toast('Biometría lista. Ya puedes entrar solo con tu dispositivo.', 'success');
   } catch (err) {
     if (err?.name === 'NotAllowedError') {
       toast('Registro biométrico cancelado', 'info');
@@ -56,6 +58,17 @@ export async function renderLogin(el) {
 
         <form id="login-form" class="glass-strong rounded-3xl p-6 sm:p-8 space-y-4" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
           ${decoyAutofillTrap()}
+          ${canBio ? `
+          <button type="button" id="login-bio-btn" class="btn btn-primary w-full py-3 text-base rounded-2xl">
+            <i class="fa-solid fa-fingerprint"></i> Entrar con biometría
+          </button>
+          <p class="text-xs text-center text-slate-500">Sin usuario ni contraseña. Solo tu huella, Face ID o PIN del dispositivo.</p>
+          <div class="flex items-center gap-3 py-1">
+            <div class="h-px flex-1 bg-slate-200"></div>
+            <span class="text-[11px] uppercase tracking-wide text-slate-400">o con cuenta</span>
+            <div class="h-px flex-1 bg-slate-200"></div>
+          </div>
+          ` : ''}
           <div>
             <label class="label" for="user">Usuario</label>
             <input id="user" name="store_user" class="input-field" type="text"
@@ -68,17 +81,12 @@ export async function renderLogin(el) {
               autocomplete="off" required placeholder="••••••••"
               data-lpignore="true" data-1p-ignore="true" />
           </div>
-          <button type="submit" id="login-btn" class="btn btn-primary w-full py-3 text-base rounded-2xl">
+          <button type="submit" id="login-btn" class="btn ${canBio ? 'btn-ghost' : 'btn-primary'} w-full py-3 text-base rounded-2xl">
             <i class="fa-solid fa-right-to-bracket"></i> Entrar
           </button>
-          ${canBio ? `
-          <button type="button" id="login-bio-btn" class="btn btn-ghost w-full py-3 text-base rounded-2xl">
-            <i class="fa-solid fa-fingerprint"></i> Entrar con biometría
-          </button>
-          <p class="text-xs text-center text-slate-500">Usa huella, Face ID o PIN del dispositivo (después de activarlo una vez).</p>
-          ` : `
+          ${!canBio ? `
           <p class="text-xs text-center text-slate-500">Este dispositivo no soporta inicio biométrico WebAuthn.</p>
-          `}
+          ` : ''}
         </form>
       </div>
     </div>
@@ -102,8 +110,12 @@ export async function renderLogin(el) {
       const data = await api.login(user, pass);
       setSession(data.token, data.user);
       toast(`Bienvenido, ${data.user.USER}`, 'success');
-      if (!data.webauthnRegistered && webauthnSupported()) {
-        await maybeRegisterWebauthn();
+      if (webauthnSupported()) {
+        const offerUpdate = sessionStorage.getItem('offer_bio_update') === '1';
+        sessionStorage.removeItem('offer_bio_update');
+        if (!data.webauthnRegistered || offerUpdate) {
+          await maybeRegisterWebauthn(!!data.webauthnRegistered);
+        }
       }
       navigate('/catalogo');
     } catch (err) {
@@ -114,23 +126,16 @@ export async function renderLogin(el) {
   });
 
   document.getElementById('login-bio-btn')?.addEventListener('click', async () => {
-    const user = userInput.value.trim();
-    if (!user) {
-      toast('Escribe tu usuario para usar biometría', 'info');
-      userInput.focus();
-      return;
-    }
-
     const btn = document.getElementById('login-bio-btn');
     const loginBtn = document.getElementById('login-btn');
     btn.disabled = true;
-    loginBtn.disabled = true;
+    if (loginBtn) loginBtn.disabled = true;
     btn.innerHTML = `<span class="spinner"></span> Esperando biometría...`;
 
     try {
-      const options = await api.webauthn.loginOptions(user);
+      const options = await api.webauthn.loginOptions();
       const credential = await startAuthentication(options);
-      const data = await api.webauthn.loginVerify(user, credential);
+      const data = await api.webauthn.loginVerify(credential);
       setSession(data.token, data.user);
       toast(`Bienvenido, ${data.user.USER}`, 'success');
       navigate('/catalogo');
@@ -138,10 +143,11 @@ export async function renderLogin(el) {
       if (err?.name === 'NotAllowedError') {
         toast('Biometría cancelada', 'info');
       } else {
-        toast(err.message || 'No se pudo iniciar con biometría', 'error');
+        sessionStorage.setItem('offer_bio_update', '1');
+        toast(err.message || 'Biometría no disponible. Entra con tu cuenta y reactívala.', 'error');
       }
       btn.disabled = false;
-      loginBtn.disabled = false;
+      if (loginBtn) loginBtn.disabled = false;
       btn.innerHTML = `<i class="fa-solid fa-fingerprint"></i> Entrar con biometría`;
     }
   });

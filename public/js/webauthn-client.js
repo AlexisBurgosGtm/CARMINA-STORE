@@ -56,11 +56,16 @@ export async function startAuthentication(optionsJSON) {
   const publicKey = {
     ...optionsJSON,
     challenge: base64URLToBuffer(optionsJSON.challenge),
-    allowCredentials: (optionsJSON.allowCredentials || []).map((c) => ({
+  };
+
+  if (optionsJSON.allowCredentials?.length) {
+    publicKey.allowCredentials = optionsJSON.allowCredentials.map((c) => ({
       ...c,
       id: base64URLToBuffer(c.id),
-    })),
-  };
+    }));
+  } else {
+    delete publicKey.allowCredentials;
+  }
 
   const cred = await navigator.credentials.get({ publicKey });
   if (!cred) throw new Error('Autenticación biométrica cancelada');

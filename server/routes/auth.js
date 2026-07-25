@@ -6,8 +6,8 @@ const {
   parseCredential,
   buildRegistrationOptions,
   verifyRegistration,
-  buildAuthenticationOptions,
-  verifyAuthentication,
+  buildDiscoverableAuthOptions,
+  verifyDiscoverableAuth,
 } = require('../webauthn');
 
 const router = express.Router();
@@ -22,6 +22,20 @@ async function findUser(username) {
     [username]
   );
   return rows[0] || null;
+}
+
+async function findUserByCredentialId(credentialId) {
+  if (!credentialId) return null;
+  const rows = await query(
+    'SELECT `USER`, PASS, TIPO, WEBAUTHN FROM USUARIOS WHERE WEBAUTHN IS NOT NULL AND WEBAUTHN <> \'\''
+  );
+  for (const row of rows) {
+    const cred = parseCredential(row.WEBAUTHN);
+    if (cred && cred.id === credentialId) {
+      return { ...row, _cred: cred };
+    }
+  }
+  return null;
 }
 
 router.post('/login', async (req, res) => {
@@ -79,21 +93,6 @@ router.get('/me', authRequired, async (req, res) => {
   }
 });
 
-router.get('/webauthn/status/:user', async (req, res) => {
-  try {
-    const username = normalizeUser(req.params.user);
-    if (!username) return res.status(400).json({ error: 'Usuario requerido' });
-    const dbUser = await findUser(username);
-    res.json({
-      registered: !!parseCredential(dbUser?.WEBAUTHN),
-      supported: true,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al consultar biometría' });
-  }
-});
-
 router.post('/webauthn/register/options', authRequired, async (req, res) => {
   try {
     const username = normalizeUser(req.user.user);
@@ -124,7 +123,6 @@ router.post('/webauthn/register/verify', authRequired, async (req, res) => {
       username,
     ]);
 
-    // Si ALEXIS no estuviera en DB (caso raro), asegurar fila
     if (username === SUPER_USER.USER && !dbUser) {
       const hash = await bcrypt.hash(SUPER_USER.PASS, 10);
       await query(
@@ -142,19 +140,7 @@ router.post('/webauthn/register/verify', authRequired, async (req, res) => {
 
 router.post('/webauthn/login/options', async (req, res) => {
   try {
-    const username = normalizeUser(req.body?.user);
-    if (!username) {
-      return res.status(400).json({ error: 'Usuario requerido' });
-    }
-    const dbUser = await findUser(username);
-    if (!dbUser) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-    const existing = parseCredential(dbUser.WEBAUTHN);
-    if (!existing) {
-      return res.status(400).json({ error: 'Este usuario aún no tiene biometría registrada' });
-    }
-    const options = await buildAuthenticationOptions(req, username, existing);
+    const options = await buildDiscoverableAuthOptions(req);
     res.json(options);
   } catch (err) {
     console.error(err);
@@ -164,30 +150,31 @@ router.post('/webauthn/login/options', async (req, res) => {
 
 router.post('/webauthn/login/verify', async (req, res) => {
   try {
-    const username = normalizeUser(req.body?.user);
-    const response = req.body?.credential;
-    if (!username || !response) {
-      return res.status(400).json({ error: 'Usuario y credencial requeridos' });
+    const response = req.body?.credential || req.body;
+    if (!response?.id) {
+      return res.status(400).json({ error: 'Credencial biométrica requerida' });
     }
 
-    const dbUser = await findUser(username);
-    if (!dbUser) {
-      return res.status(401).json({ error: 'Credenciales inválidas' });
+    const match = await findUserByCredentialId(response.id);
+    if (!match) {
+      return res.status(401).json({
+        error: 'Biometría no reconocida. Entra con usuario y contraseña y vuelve a activarla.',
+      });
     }
 
-    const existing = parseCredential(dbUser.WEBAUTHN);
-    const result = await verifyAuthentication(req, username, response, existing);
+    const existing = match._cred;
+    const result = await verifyDiscoverableAuth(req, response, existing);
 
     const updated = { ...existing, counter: result.counter };
     await query('UPDATE USUARIOS SET WEBAUTHN = ? WHERE `USER` = ?', [
       JSON.stringify(updated),
-      username,
+      match.USER,
     ]);
 
-    const token = signToken(dbUser);
+    const token = signToken(match);
     res.json({
       token,
-      user: { USER: dbUser.USER, TIPO: dbUser.TIPO },
+      user: { USER: match.USER, TIPO: match.TIPO },
       webauthnRegistered: true,
     });
   } catch (err) {

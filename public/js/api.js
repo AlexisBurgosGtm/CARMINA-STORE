@@ -93,10 +93,10 @@ export const api = {
     registerOptions: () => request('/auth/webauthn/register/options', { method: 'POST', body: {} }),
     registerVerify: (credential) =>
       request('/auth/webauthn/register/verify', { method: 'POST', body: credential }),
-    loginOptions: (user) =>
-      request('/auth/webauthn/login/options', { method: 'POST', body: { user } }),
-    loginVerify: (user, credential) =>
-      request('/auth/webauthn/login/verify', { method: 'POST', body: { user, credential } }),
+    loginOptions: () =>
+      request('/auth/webauthn/login/options', { method: 'POST', body: {} }),
+    loginVerify: (credential) =>
+      request('/auth/webauthn/login/verify', { method: 'POST', body: { credential } }),
   },
 
   productos: {
