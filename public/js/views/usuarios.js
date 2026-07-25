@@ -26,7 +26,8 @@ function formHtml(item = null) {
       </div>
       <div>
         <label class="label">Contraseña${isEdit ? ' — dejar vacío para no cambiar' : ''}</label>
-        <input name="PASS" type="password" class="input-field" autocomplete="new-password" ${isEdit ? '' : 'required'} maxlength="100" />
+        <input name="PASS" type="text" class="input-field input-secret" autocomplete="off"
+          data-lpignore="true" data-1p-ignore="true" ${isEdit ? '' : 'required'} maxlength="100" />
       </div>
       <div>
         <label class="label">Tipo</label>

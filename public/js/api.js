@@ -32,6 +32,11 @@ export function isAdmin() {
   return u && u.TIPO === 'ADMINISTRADOR';
 }
 
+export function isOperador() {
+  const u = getUser();
+  return u && u.TIPO === 'OPERADOR';
+}
+
 async function request(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   const token = getToken();
@@ -68,8 +73,9 @@ async function request(path, options = {}) {
 
   if (!res.ok) {
     if (res.status === 401) {
-      clearSession();
-      if (!path.includes('/auth/login')) {
+      const isAuthAttempt = path.includes('/auth/login') || path.includes('/auth/webauthn/login');
+      if (!isAuthAttempt) {
+        clearSession();
         location.hash = '#/login';
       }
     }
@@ -82,6 +88,16 @@ async function request(path, options = {}) {
 export const api = {
   login: (user, pass) => request('/auth/login', { method: 'POST', body: { user, pass } }),
   me: () => request('/auth/me'),
+  webauthn: {
+    status: (user) => request(`/auth/webauthn/status/${encodeURIComponent(user)}`),
+    registerOptions: () => request('/auth/webauthn/register/options', { method: 'POST', body: {} }),
+    registerVerify: (credential) =>
+      request('/auth/webauthn/register/verify', { method: 'POST', body: credential }),
+    loginOptions: (user) =>
+      request('/auth/webauthn/login/options', { method: 'POST', body: { user } }),
+    loginVerify: (user, credential) =>
+      request('/auth/webauthn/login/verify', { method: 'POST', body: { user, credential } }),
+  },
 
   productos: {
     list: () => request('/productos'),
@@ -98,6 +114,12 @@ export const api = {
     cotizar: (id) =>
       request(`/productos/${encodeURIComponent(id)}/cotizar`, {
         method: 'POST',
+        timeoutMs: 60000,
+      }),
+    cotizarTexto: (descripcion) =>
+      request('/productos/cotizar', {
+        method: 'POST',
+        body: { descripcion },
         timeoutMs: 60000,
       }),
     fotoUrl: (id) => {

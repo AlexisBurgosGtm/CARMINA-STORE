@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "shop-store",
   "version": "1.0.0",
   "description": "Carmina Store - Catálogo, proveedores y cotización con Gemini",
@@ -19,6 +19,7 @@
   "license": "ISC",
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
+    "@simplewebauthn/server": "^13.3.2",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

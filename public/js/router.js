@@ -51,6 +51,11 @@ export async function startRouter(mountEl) {
       routePath = '/catalogo';
     }
 
+    if (routePath === '/configuraciones' && !isAdmin()) {
+      if (location.hash !== '#/catalogo') location.hash = '#/catalogo';
+      routePath = '/catalogo';
+    }
+
     const handler = routes[routePath] || routes['/404'];
     if (!handler) {
       mountEl.innerHTML = `<div class="p-8 text-center">Ruta no encontrada</div>`;
@@ -99,7 +104,7 @@ export async function startRouter(mountEl) {
   await resolve();
 }
 
-export function shell(contentHtml, { title = '', fab = null, active = '' } = {}) {
+export function shell(contentHtml, { title = '', fab = null, fabSearch = false, active = '' } = {}) {
   const user = getUser();
   const admin = isAdmin();
 
@@ -111,9 +116,14 @@ export function shell(contentHtml, { title = '', fab = null, active = '' } = {})
             <p class="font-display text-xl font-bold text-brand-800 tracking-tight truncate">Carmina Store</p>
             <p class="text-xs text-slate-500 truncate">${title}</p>
           </div>
-          <div class="hidden sm:block text-right shrink-0">
-            <p class="text-sm font-semibold text-slate-700">${user?.USER || ''}</p>
-            <p class="text-[10px] uppercase tracking-wide text-brand-700">${user?.TIPO || ''}</p>
+          <div class="header-user shrink-0">
+            <div class="header-user-info text-right min-w-0">
+              <p class="text-sm font-semibold text-slate-700 truncate">${user?.USER || ''}</p>
+              <p class="text-[10px] uppercase tracking-wide text-brand-700 truncate">${user?.TIPO || ''}</p>
+            </div>
+            <button id="btn-logout-header" type="button" class="btn-logout-header" title="Cerrar sesión" aria-label="Cerrar sesión">
+              <i class="fa-solid fa-power-off"></i>
+            </button>
           </div>
         </div>
       </header>
@@ -122,6 +132,7 @@ export function shell(contentHtml, { title = '', fab = null, active = '' } = {})
         ${contentHtml}
       </main>
 
+      ${fabSearch ? `<button id="fab-search" class="fab-search" type="button" title="Cotizar con IA" aria-label="Cotizar con IA"><i class="fa-solid fa-magnifying-glass"></i></button>` : ''}
       ${fab ? `<button id="fab-new" class="fab" title="Nuevo" aria-label="Nuevo registro"><i class="fa-solid fa-plus"></i></button>` : ''}
 
       <button id="fab-menu" class="fab-menu" type="button" aria-label="Abrir menú">
@@ -149,10 +160,10 @@ export function shell(contentHtml, { title = '', fab = null, active = '' } = {})
           ${admin ? `
           <a href="#/usuarios" class="menu-item ${active === 'usuarios' ? 'active' : ''}">
             <i class="fa-solid fa-users-gear"></i> Usuarios
-          </a>` : ''}
+          </a>
           <a href="#/configuraciones" class="menu-item ${active === 'configuraciones' ? 'active' : ''}">
             <i class="fa-solid fa-sliders"></i> Configuraciones
-          </a>
+          </a>` : ''}
         </nav>
         <button id="btn-logout" class="btn btn-danger w-full mt-4">
           <i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión
@@ -164,7 +175,7 @@ export function shell(contentHtml, { title = '', fab = null, active = '' } = {})
   `;
 }
 
-export function bindShell(onFab) {
+export function bindShell(onFab, onFabSearch) {
   const overlay = document.getElementById('drawer-overlay');
   const drawer = document.getElementById('drawer');
   const open = () => {
@@ -182,13 +193,40 @@ export function bindShell(onFab) {
   drawer?.querySelectorAll('a').forEach((a) => a.addEventListener('click', close));
 
   document.getElementById('btn-logout')?.addEventListener('click', () => {
-    clearSession();
-    navigate('/login');
+    confirmLogout();
+  });
+  document.getElementById('btn-logout-header')?.addEventListener('click', () => {
+    confirmLogout();
   });
 
   if (onFab) {
     document.getElementById('fab-new')?.addEventListener('click', onFab);
   }
+
+  if (onFabSearch) {
+    document.getElementById('fab-search')?.addEventListener('click', onFabSearch);
+  }
+}
+
+async function confirmLogout() {
+  if (window.Swal) {
+    const result = await window.Swal.fire({
+      icon: 'question',
+      title: '¿Cerrar sesión?',
+      text: 'Se cerrará tu sesión y volverás al login.',
+      showCancelButton: true,
+      confirmButtonText: 'Salir',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#94a3b8',
+      reverseButtons: false,
+    });
+    if (!result.isConfirmed) return;
+  } else if (!window.confirm('¿Cerrar sesión?')) {
+    return;
+  }
+  clearSession();
+  navigate('/login');
 }
 
 export function openModal(html) {
@@ -267,9 +305,11 @@ export async function confirmDeleteWithClave(mensajeConfirmacion) {
     input: 'password',
     inputPlaceholder: 'Clave',
     inputAttributes: {
-      autocomplete: 'new-password',
+      autocomplete: 'off',
       autocapitalize: 'off',
       autocorrect: 'off',
+      'data-lpignore': 'true',
+      'data-1p-ignore': 'true',
     },
     showCancelButton: true,
     confirmButtonText: 'Continuar',

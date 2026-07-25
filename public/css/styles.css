@@ -66,6 +66,50 @@ img, video, canvas, svg {
   overflow: hidden;
 }
 
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  max-width: 55%;
+}
+
+.header-user-info {
+  min-width: 0;
+  display: none;
+}
+
+@media (min-width: 480px) {
+  .header-user-info {
+    display: block;
+  }
+}
+
+.btn-logout-header {
+  flex-shrink: 0;
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: transform 0.15s, background 0.2s, box-shadow 0.2s;
+}
+
+.btn-logout-header:hover {
+  transform: translateY(-1px);
+  background: rgba(239, 68, 68, 0.2);
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.2);
+}
+
+.btn-logout-header:active {
+  transform: scale(0.96);
+}
+
 .glass {
   background: var(--glass);
   backdrop-filter: blur(18px);
@@ -169,6 +213,36 @@ img, video, canvas, svg {
 
 .fab:active {
   transform: scale(0.96);
+}
+
+.fab-search {
+  position: fixed;
+  left: 50%;
+  bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 9999px;
+  background: linear-gradient(145deg, #0ea5e9, #0284c7);
+  color: white;
+  font-size: 1.45rem;
+  border: none;
+  box-shadow: 0 12px 28px rgba(2, 132, 199, 0.4);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.fab-search:hover {
+  transform: translateX(-50%) scale(1.06);
+  box-shadow: 0 16px 36px rgba(2, 132, 199, 0.5);
+}
+
+.fab-search:active {
+  transform: translateX(-50%) scale(0.96);
 }
 
 .fab-menu {
@@ -730,6 +804,23 @@ img, video, canvas, svg {
   display: grid;
   place-items: center;
   padding: 1.5rem;
+}
+
+/* Evitar prompt de guardar contraseña */
+.autofill-trap {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.input-secret {
+  -webkit-text-security: disc;
+  text-security: disc;
 }
 
 .badge {

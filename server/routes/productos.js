@@ -47,6 +47,23 @@ function uploadSingleFoto(req, res, next) {
 
 router.use(authRequired);
 
+router.post('/cotizar', async (req, res) => {
+  try {
+    const descripcion = String(req.body?.descripcion || '').trim();
+    if (!descripcion) {
+      return res.status(400).json({ error: 'La descripción del producto es requerida' });
+    }
+    if (descripcion.length < 3) {
+      return res.status(400).json({ error: 'Escribe al menos 3 caracteres para cotizar' });
+    }
+    const cotizacion = await cotizarProducto(descripcion);
+    res.json(cotizacion);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Error al cotizar con Gemini' });
+  }
+});
+
 router.get('/', async (_req, res) => {
   try {
     const rows = await query(`

@@ -55,9 +55,12 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS USUARIOS (
       \`USER\` VARCHAR(50) NOT NULL PRIMARY KEY,
       PASS VARCHAR(255) NOT NULL,
-      TIPO ENUM('ADMINISTRADOR','OPERADOR') NOT NULL DEFAULT 'OPERADOR'
+      TIPO ENUM('ADMINISTRADOR','OPERADOR') NOT NULL DEFAULT 'OPERADOR',
+      WEBAUTHN LONGTEXT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+
+  await ensureColumn('USUARIOS', 'WEBAUTHN', 'WEBAUTHN LONGTEXT NULL');
 
   await query(`
     CREATE TABLE IF NOT EXISTS SETTINGS (
@@ -118,6 +121,20 @@ async function initDatabase() {
       SUPER_USER.USER,
     ]);
     console.log('Super usuario ALEXIS actualizado.');
+  }
+
+  // Usuario OPERADOR (solo se crea si no existe; no se sobrescribe la contraseña)
+  const operadorUser = 'OPERADOR';
+  const operadorPass = process.env.OPERADOR_PASS || 'operador123';
+  const operadorExisting = await query('SELECT `USER` FROM USUARIOS WHERE `USER` = ?', [operadorUser]);
+  if (!operadorExisting.length) {
+    const hash = await bcrypt.hash(operadorPass, 10);
+    await query('INSERT INTO USUARIOS (`USER`, PASS, TIPO) VALUES (?, ?, ?)', [
+      operadorUser,
+      hash,
+      'OPERADOR',
+    ]);
+    console.log('Usuario OPERADOR creado.');
   }
 
   console.log('Base de datos lista.');

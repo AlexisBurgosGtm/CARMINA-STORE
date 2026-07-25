@@ -288,11 +288,15 @@ function showProductModal(product) {
 }
 
 async function cotizar(product) {
+  await showCotizacionModal(product.DESPROD, () => api.productos.cotizar(product.CODPROD));
+}
+
+async function showCotizacionModal(descripcion, fetchCotizacion) {
   openModal(`
     <div class="flex items-center justify-between mb-4">
       <div>
         <h2 class="font-display text-xl font-bold text-brand-900">Cotización Gemini</h2>
-        <p class="text-sm text-slate-500">${esc(product.DESPROD)}</p>
+        <p class="text-sm text-slate-500">${esc(descripcion)}</p>
       </div>
       <button id="modal-close" class="btn btn-ghost btn-icon"><i class="fa-solid fa-xmark"></i></button>
     </div>
@@ -304,15 +308,18 @@ async function cotizar(product) {
     </div>
   `);
 
-  // Expand modal
   document.querySelector('.modal-panel')?.classList.add('modal-wide');
 
   try {
-    const data = await api.productos.cotizar(product.CODPROD);
+    const data = await fetchCotizacion();
     const body = document.getElementById('cotizacion-body');
     if (!body) return;
 
-    const rows = (data.cotizaciones || []).map((c) => `
+    const cotizaciones = [...(data.cotizaciones || [])].sort(
+      (a, b) => Number(a?.precio || 0) - Number(b?.precio || 0)
+    );
+
+    const rows = cotizaciones.map((c) => `
       <tr>
         <td class="font-semibold">${esc(c.tienda)}</td>
         <td>${formatMoney(c.precio)}</td>
@@ -356,6 +363,44 @@ async function cotizar(product) {
     if (body) body.innerHTML = `<p class="text-red-600">${esc(err.message)}</p>`;
     toast(err.message, 'error');
   }
+}
+
+function openCotizarTextoModal() {
+  openModal(`
+    <div class="flex items-start justify-between gap-3 mb-4">
+      <div class="min-w-0">
+        <h2 class="font-display text-xl font-bold text-brand-900">Cotizar con IA</h2>
+        <p class="text-sm text-slate-500">Escribe el producto a cotizar (sin crearlo en el catálogo)</p>
+      </div>
+      <button id="modal-close" class="btn btn-ghost btn-icon shrink-0"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="cotizar-texto-form" class="space-y-3" autocomplete="off">
+      <div>
+        <label class="label" for="cotizar-descripcion">Producto</label>
+        <input id="cotizar-descripcion" name="descripcion" class="input-field" required maxlength="255"
+          autocomplete="off" placeholder="Ej. Audífonos Bluetooth Sony WH-1000XM5" />
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button type="button" id="modal-close-2" class="btn btn-ghost flex-1">Cancelar</button>
+        <button type="submit" class="btn btn-primary flex-1">
+          <i class="fa-solid fa-robot"></i> Cotizar con IA
+        </button>
+      </div>
+    </form>
+  `);
+
+  document.getElementById('modal-close-2')?.addEventListener('click', closeModal);
+  document.getElementById('cotizar-descripcion')?.focus();
+
+  document.getElementById('cotizar-texto-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const descripcion = document.getElementById('cotizar-descripcion')?.value.trim() || '';
+    if (descripcion.length < 3) {
+      toast('Escribe al menos 3 caracteres', 'error');
+      return;
+    }
+    await showCotizacionModal(descripcion, () => api.productos.cotizarTexto(descripcion));
+  });
 }
 
 function openProductEditor(proveedores, product = null) {
@@ -563,8 +608,8 @@ export async function renderCatalogo(el) {
       <div class="glass rounded-3xl p-8 text-center text-slate-500">
         <span class="spinner inline-block" style="border-color:rgba(15,118,110,.25);border-top-color:#0f766e"></span>
       </div>
-    `, { title: 'Productos', fab: true, active: 'catalogo' });
-    bindShell(() => {});
+    `, { title: 'Productos', fab: true, fabSearch: true, active: 'catalogo' });
+    bindShell(() => {}, openCotizarTextoModal);
 
     let productos = [];
     let proveedores = [];
@@ -586,7 +631,7 @@ export async function renderCatalogo(el) {
           <p class="text-sm">${esc(err.message)}</p>
           <button id="btn-retry-cat" class="btn btn-primary mt-4">Reintentar</button>
         </div>
-      `, { title: 'Productos', fab: true, active: 'catalogo' });
+      `, { title: 'Productos', fab: true, fabSearch: true, active: 'catalogo' });
       bindShell(async () => {
         try {
           const provs = await loadProveedores();
@@ -598,7 +643,7 @@ export async function renderCatalogo(el) {
         } catch (e) {
           toast(e.message, 'error');
         }
-      });
+      }, openCotizarTextoModal);
       document.getElementById('btn-retry-cat')?.addEventListener('click', paint);
       return;
     }
@@ -627,8 +672,8 @@ export async function renderCatalogo(el) {
           <p>No hay productos aún</p>
           <p class="text-sm mt-1">Usa el botón + para agregar</p>
         </div>
-      `, { title: 'Productos', fab: true, active: 'catalogo' });
-      bindShell(openCreate);
+      `, { title: 'Productos', fab: true, fabSearch: true, active: 'catalogo' });
+      bindShell(openCreate, openCotizarTextoModal);
       return;
     }
 
@@ -665,9 +710,9 @@ export async function renderCatalogo(el) {
         </div>
       </div>
       <div class="space-y-2" id="product-list">${productListHtml(filtered, factor)}</div>
-    `, { title: 'Productos', fab: true, active: 'catalogo' });
+    `, { title: 'Productos', fab: true, fabSearch: true, active: 'catalogo' });
 
-    bindShell(openCreate);
+    bindShell(openCreate, openCotizarTextoModal);
 
     const listEl = document.getElementById('product-list');
     const countEl = document.getElementById('catalog-count');

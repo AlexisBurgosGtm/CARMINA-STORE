@@ -1,6 +1,6 @@
 const express = require('express');
 const { query } = require('../db');
-const { authRequired } = require('../middleware/auth');
+const { authRequired, adminRequired } = require('../middleware/auth');
 const {
   GEMINI_MODELS,
   SETTING_MODELO,
@@ -12,7 +12,7 @@ router.use(authRequired);
 
 const SECRET_OPTION = 'CLAVE VERIFICACIONES';
 
-router.get('/', async (_req, res) => {
+router.get('/', adminRequired, async (_req, res) => {
   try {
     const rows = await query('SELECT OPCION, VALOR FROM SETTINGS ORDER BY OPCION');
     const safe = rows.map((r) =>
@@ -25,7 +25,7 @@ router.get('/', async (_req, res) => {
   }
 });
 
-router.get('/gemini-models', (_req, res) => {
+router.get('/gemini-models', adminRequired, (_req, res) => {
   res.json({ models: GEMINI_MODELS, setting: SETTING_MODELO });
 });
 
@@ -62,7 +62,7 @@ router.get('/:opcion', async (req, res) => {
   }
 });
 
-router.put('/:opcion', async (req, res) => {
+router.put('/:opcion', adminRequired, async (req, res) => {
   try {
     const opcion = decodeURIComponent(req.params.opcion);
     const { VALOR } = req.body;

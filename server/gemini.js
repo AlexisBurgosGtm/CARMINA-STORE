@@ -72,7 +72,7 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown, sin backticks) con este 
   "resumen": "breve resumen de la cotización"
 }
 
-Usa precios realistas aproximados en pesos mexicanos (MXN) basados en tu conocimiento del mercado mexicano. Incluye exactamente 10 o más cotizaciones.`;
+Usa precios realistas aproximados en pesos mexicanos (MXN) basados en tu conocimiento del mercado mexicano. Incluye exactamente 10 o más cotizaciones. Ordena el arreglo "cotizaciones" de menor a mayor precio.`;
 
   let result;
   try {
@@ -90,13 +90,39 @@ Usa precios realistas aproximados en pesos mexicanos (MXN) basados en tu conocim
     .replace(/\s*```$/i, '')
     .trim();
 
+  let data;
   try {
-    return JSON.parse(cleaned);
+    data = JSON.parse(cleaned);
   } catch {
     const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error('No se pudo parsear la respuesta de Gemini');
+    if (match) data = JSON.parse(match[0]);
+    else throw new Error('No se pudo parsear la respuesta de Gemini');
   }
+
+  return normalizeCotizacion(data);
+}
+
+function normalizeCotizacion(data) {
+  const list = Array.isArray(data?.cotizaciones) ? [...data.cotizaciones] : [];
+  list.sort((a, b) => Number(a?.precio || 0) - Number(b?.precio || 0));
+
+  const precios = list
+    .map((c) => Number(c?.precio))
+    .filter((n) => Number.isFinite(n) && n >= 0);
+
+  const precio_minimo = precios.length ? Math.min(...precios) : Number(data?.precio_minimo) || 0;
+  const precio_maximo = precios.length ? Math.max(...precios) : Number(data?.precio_maximo) || 0;
+  const precio_promedio = precios.length
+    ? precios.reduce((s, n) => s + n, 0) / precios.length
+    : Number(data?.precio_promedio) || 0;
+
+  return {
+    ...data,
+    cotizaciones: list,
+    precio_minimo,
+    precio_maximo,
+    precio_promedio: Math.round(precio_promedio * 100) / 100,
+  };
 }
 
 module.exports = { cotizarProducto, getConfiguredGeminiModel };

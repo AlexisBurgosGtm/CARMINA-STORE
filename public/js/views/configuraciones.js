@@ -62,13 +62,18 @@ export async function renderConfiguraciones(el) {
             <select name="VALOR" class="input-field flex-1" required autocomplete="off">
               ${options}
             </select>`;
+        } else if (isSecret) {
+          controlHtml = `
+            <input name="setting_secret" class="input-field flex-1 input-secret" type="text"
+              autocomplete="off" data-lpignore="true" data-1p-ignore="true"
+              placeholder="Nueva clave (no se muestra la actual)"
+              required />`;
         } else {
           controlHtml = `
             <input name="VALOR" class="input-field flex-1"
-              type="${isSecret ? 'password' : 'text'}"
-              autocomplete="${isSecret ? 'new-password' : 'off'}"
-              placeholder="${isSecret ? 'Nueva clave (no se muestra la actual)' : ''}"
-              value="${isSecret ? '' : esc(s.VALOR)}"
+              type="text"
+              autocomplete="off"
+              value="${esc(s.VALOR)}"
               required />`;
         }
 
@@ -103,7 +108,8 @@ export async function renderConfiguraciones(el) {
         e.preventDefault();
         const article = form.closest('[data-opcion]');
         const opcion = article?.dataset.opcion;
-        const valor = form.VALOR.value.trim();
+        const valorInput = form.VALOR || form.setting_secret;
+        const valor = valorInput?.value?.trim() || '';
         const btn = form.querySelector('[type=submit]');
         btn.disabled = true;
         try {
