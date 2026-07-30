@@ -289,7 +289,7 @@ export function alertConfirm(title, text = '') {
 }
 
 /**
- * 1) Solicita clave de verificaciones (oculta)
+ * 1) Solicita clave de verificaciones (oculta, sin prompt de guardar)
  * 2) Valida en servidor
  * 3) Pide confirmación
  * @returns {Promise<boolean>}
@@ -301,25 +301,37 @@ export async function confirmDeleteWithClave(mensajeConfirmacion) {
 
   const { value: clave, isConfirmed: claveOk } = await window.Swal.fire({
     title: 'Clave de verificación',
-    text: 'Escribe la clave de verificaciones para continuar',
-    input: 'password',
-    inputPlaceholder: 'Clave',
-    inputAttributes: {
-      autocomplete: 'off',
-      autocapitalize: 'off',
-      autocorrect: 'off',
-      'data-lpignore': 'true',
-      'data-1p-ignore': 'true',
-    },
+    html: `
+      <p class="swal-clave-hint">Escribe la clave de verificaciones para continuar</p>
+      <div class="autofill-trap" aria-hidden="true">
+        <input type="text" tabindex="-1" autocomplete="username" />
+        <input type="password" tabindex="-1" autocomplete="current-password" />
+      </div>
+      <input id="swal-clave-input" class="swal2-input input-secret" type="text"
+        autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+        data-lpignore="true" data-1p-ignore="true" placeholder="Clave" />
+    `,
+    focusConfirm: false,
     showCancelButton: true,
     confirmButtonText: 'Continuar',
     cancelButtonText: 'Cancelar',
     confirmButtonColor: '#0f766e',
     cancelButtonColor: '#94a3b8',
     reverseButtons: false,
-    inputValidator: (value) => {
-      if (!value) return 'Debes escribir la clave';
-      return null;
+    didOpen: () => {
+      const el = document.getElementById('swal-clave-input');
+      if (!el) return;
+      el.setAttribute('readonly', 'readonly');
+      el.addEventListener('focus', () => el.removeAttribute('readonly'), { once: true });
+      setTimeout(() => el.focus(), 50);
+    },
+    preConfirm: () => {
+      const value = document.getElementById('swal-clave-input')?.value?.trim() || '';
+      if (!value) {
+        window.Swal.showValidationMessage('Debes escribir la clave');
+        return false;
+      }
+      return value;
     },
   });
 

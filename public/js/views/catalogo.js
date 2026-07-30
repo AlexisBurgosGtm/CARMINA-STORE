@@ -109,7 +109,13 @@ function productForm(proveedores, product = null, factor = 2.2) {
       </div>
       <div>
         <label class="label">Foto</label>
-        <input name="foto" type="file" accept="image/*" class="input-field" autocomplete="off" />
+        <div class="code-with-scan">
+          <input id="input-foto" name="foto" type="file" accept="image/*" class="input-field" autocomplete="off" />
+          <button type="button" id="btn-take-photo" class="btn-scan" title="Tomar foto con la cámara" aria-label="Tomar foto con la cámara">
+            <i class="fa-solid fa-camera"></i>
+          </button>
+        </div>
+        <p id="foto-capture-name" class="text-xs text-brand-700 mt-1 hidden"></p>
         <p class="text-xs text-slate-500 mt-1">Máx. ${MAX_FOTO_MB} MB. Se guarda en WebDAV con el nombre del código.</p>
         ${product?.FOTO ? `<p class="text-xs text-slate-500 mt-1">Actual: ${esc(product.FOTO)}</p>` : ''}
       </div>
@@ -234,6 +240,123 @@ async function openBarcodeScanner(onCode) {
     stacked.close();
     toast(err?.message || 'No se pudo abrir la cámara. Revisa los permisos del navegador.', 'error');
   }
+}
+
+function setFotoFileInput(file) {
+  const input = document.getElementById('input-foto');
+  if (!input || !file) return;
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  input.files = dt.files;
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+
+  const hint = document.getElementById('foto-capture-name');
+  if (hint) {
+    hint.textContent = `Foto lista: ${file.name}`;
+    hint.classList.remove('hidden');
+  }
+}
+
+async function openCameraCapture() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    toast('La cámara no está disponible en este dispositivo', 'error');
+    return;
+  }
+
+  const stacked = openStackedModal(`
+    <div class="flex items-start justify-between gap-3 mb-4">
+      <div>
+        <h2 class="font-display text-xl font-bold text-brand-900">Tomar foto</h2>
+        <p class="text-sm text-slate-500">Enfoca el producto y captura la imagen</p>
+      </div>
+      <button id="modal-stack-close" class="btn btn-ghost btn-icon" type="button">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="camera-capture-wrap">
+      <video id="camera-preview" class="camera-preview" playsinline autoplay muted></video>
+      <canvas id="camera-canvas" class="hidden"></canvas>
+    </div>
+    <div class="flex gap-2 mt-4">
+      <button type="button" id="modal-stack-cancel" class="btn btn-ghost flex-1">Cancelar</button>
+      <button type="button" id="btn-capture-shot" class="btn btn-primary flex-1">
+        <i class="fa-solid fa-camera"></i> Capturar
+      </button>
+    </div>
+  `);
+
+  if (!stacked) return;
+
+  const video = stacked.el.querySelector('#camera-preview');
+  const canvas = stacked.el.querySelector('#camera-canvas');
+  let stream = null;
+
+  const stopStream = () => {
+    stream?.getTracks?.().forEach((t) => t.stop());
+    stream = null;
+    if (video) video.srcObject = null;
+  };
+
+  const closeAndStop = () => {
+    stopStream();
+    stacked.close();
+  };
+
+  stacked.el.querySelector('#modal-stack-close')?.addEventListener('click', closeAndStop);
+  stacked.el.querySelector('#modal-stack-cancel')?.addEventListener('click', closeAndStop);
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    });
+    if (!video) {
+      closeAndStop();
+      return;
+    }
+    video.srcObject = stream;
+    await video.play().catch(() => {});
+  } catch (err) {
+    closeAndStop();
+    toast(err?.message || 'No se pudo abrir la cámara. Revisa los permisos del navegador.', 'error');
+    return;
+  }
+
+  stacked.el.querySelector('#btn-capture-shot')?.addEventListener('click', async () => {
+    if (!video || !canvas) return;
+    const w = video.videoWidth || 1280;
+    const h = video.videoHeight || 720;
+    if (!w || !h) {
+      toast('Espera a que la cámara esté lista', 'info');
+      return;
+    }
+
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, w, h);
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+    if (!blob) {
+      toast('No se pudo capturar la imagen', 'error');
+      return;
+    }
+
+    if (blob.size > MAX_FOTO_BYTES) {
+      toast(`La foto no puede superar ${MAX_FOTO_MB} MB`, 'error');
+      return;
+    }
+
+    const file = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    stopStream();
+    stacked.close();
+    setFotoFileInput(file);
+    toast('Foto cargada en el producto', 'success');
+  });
 }
 
 function showProductModal(product) {
@@ -417,6 +540,23 @@ function openProductEditor(proveedores, product = null) {
           input.dispatchEvent(new Event('input', { bubbles: true }));
         }
       });
+    });
+
+    document.getElementById('btn-take-photo')?.addEventListener('click', () => {
+      openCameraCapture();
+    });
+
+    document.getElementById('input-foto')?.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      const hint = document.getElementById('foto-capture-name');
+      if (!hint) return;
+      if (file) {
+        hint.textContent = `Archivo: ${file.name}`;
+        hint.classList.remove('hidden');
+      } else {
+        hint.classList.add('hidden');
+        hint.textContent = '';
+      }
     });
 
     const showUploadLoader = (visible, message = 'Subiendo foto...') => {
