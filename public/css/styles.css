@@ -475,15 +475,72 @@ img, video, canvas, svg {
   background: #0f172a;
 }
 
-.swal-clave-hint {
-  margin: 0 0 0.75rem;
-  color: #64748b;
-  font-size: 0.9rem;
+.swal-clave-popup {
+  width: min(18.5rem, calc(100vw - 1.5rem)) !important;
+  max-width: calc(100vw - 1.5rem) !important;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
+.swal-clave-title {
+  font-size: 1.15rem !important;
+  padding: 0 !important;
+  line-height: 1.3 !important;
+}
+
+.swal-clave-html {
+  margin: 0.5rem 0 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+.swal-clave-hint {
+  margin: 0 0 0.65rem;
+  color: #64748b;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.swal-clave-field {
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 0.7rem 0.85rem !important;
+  border: 1px solid rgba(15, 118, 110, 0.25);
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 16px !important; /* evita zoom iOS */
+  line-height: 1.3;
+  color: #0f172a;
+}
+
+.swal-clave-field:focus {
+  outline: none;
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+}
+
+.swal-clave-field.input-secret,
 .swal2-input.input-secret {
   -webkit-text-security: disc;
   text-security: disc;
+}
+
+.swal-clave-actions {
+  margin: 0.85rem 0 0 !important;
+  flex-wrap: nowrap !important;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.swal-clave-btn {
+  flex: 1 1 0;
+  margin: 0 !important;
+  font-size: 0.875rem !important;
+  padding: 0.55rem 0.65rem !important;
 }
 
 /* SweetAlert2: cancel izquierda, confirmar derecha */
@@ -499,6 +556,12 @@ img, video, canvas, svg {
 .swal2-actions .swal2-cancel {
   order: 1;
   margin-right: 0.5rem;
+}
+
+.swal-clave-actions .swal2-confirm,
+.swal-clave-actions .swal2-cancel {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
 }
 
 .modal-wide {

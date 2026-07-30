@@ -383,7 +383,7 @@ export function alertConfirm(title, text = '') {
 }
 
 /**
- * 1) Solicita clave de verificaciones (oculta, sin prompt de guardar)
+ * 1) Solicita clave de verificaciones (compacta, usable en móvil, sin guardar contraseña)
  * 2) Valida en servidor
  * 3) Pide confirmación
  * @returns {Promise<boolean>}
@@ -396,28 +396,44 @@ export async function confirmDeleteWithClave(mensajeConfirmacion) {
   const { value: clave, isConfirmed: claveOk } = await window.Swal.fire({
     title: 'Clave de verificación',
     html: `
-      <p class="swal-clave-hint">Escribe la clave de verificaciones para continuar</p>
-      <div class="autofill-trap" aria-hidden="true">
-        <input type="text" tabindex="-1" autocomplete="username" />
-        <input type="password" tabindex="-1" autocomplete="current-password" />
-      </div>
-      <input id="swal-clave-input" class="swal2-input input-secret" type="text"
-        autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+      <p class="swal-clave-hint">Escribe la clave para continuar</p>
+      <input id="swal-clave-input" class="swal-clave-field input-secret" type="text"
+        name="verification_code" inputmode="text" autocomplete="one-time-code"
+        autocapitalize="off" autocorrect="off" spellcheck="false"
         data-lpignore="true" data-1p-ignore="true" placeholder="Clave" />
     `,
+    width: '18.5rem',
+    padding: '1.1rem',
     focusConfirm: false,
+    allowEnterKey: true,
     showCancelButton: true,
     confirmButtonText: 'Continuar',
     cancelButtonText: 'Cancelar',
     confirmButtonColor: '#0f766e',
     cancelButtonColor: '#94a3b8',
     reverseButtons: false,
+    customClass: {
+      popup: 'swal-clave-popup',
+      title: 'swal-clave-title',
+      htmlContainer: 'swal-clave-html',
+      actions: 'swal-clave-actions',
+      confirmButton: 'swal-clave-btn',
+      cancelButton: 'swal-clave-btn',
+    },
     didOpen: () => {
       const el = document.getElementById('swal-clave-input');
       if (!el) return;
-      el.setAttribute('readonly', 'readonly');
-      el.addEventListener('focus', () => el.removeAttribute('readonly'), { once: true });
-      setTimeout(() => el.focus(), 50);
+      // En móvil: enfocar sin scroll y permitir escribir de inmediato
+      requestAnimationFrame(() => {
+        el.focus({ preventScroll: true });
+        el.select?.();
+      });
+      el.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          window.Swal.clickConfirm();
+        }
+      });
     },
     preConfirm: () => {
       const value = document.getElementById('swal-clave-input')?.value?.trim() || '';
@@ -438,8 +454,10 @@ export async function confirmDeleteWithClave(mensajeConfirmacion) {
       icon: 'error',
       title: 'Clave incorrecta',
       text: err.message || 'No autorizado',
+      width: '18.5rem',
       confirmButtonText: 'Aceptar',
       confirmButtonColor: '#0f766e',
+      customClass: { popup: 'swal-clave-popup' },
     });
     return false;
   }
