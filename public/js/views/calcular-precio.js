@@ -64,7 +64,7 @@ export async function renderCalcularPrecio(el) {
         <label class="label" for="calc-margen">Margen de Ganancia (%)</label>
         <div class="money-input">
           <span class="money-prefix" title="Porcentaje">%</span>
-          <input id="calc-margen" class="input-field" type="number" step="0.1" min="0" value="20" autocomplete="off" />
+          <input id="calc-margen" class="input-field" type="number" step="0.1" min="0" max="99.9" value="20" autocomplete="off" />
         </div>
       </div>
 
@@ -77,7 +77,7 @@ export async function renderCalcularPrecio(el) {
       <div class="calc-result-card calc-result-highlight">
         <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold">Precio venta Quetzales</p>
         <p id="calc-precio-venta" class="font-display text-3xl font-bold text-brand-700 mt-1">${formatQ(0)}</p>
-        <p class="text-xs text-slate-500 mt-1">Costo en quetzales + margen de ganancia</p>
+        <p class="text-xs text-slate-500 mt-1">(Costo quetzales × 100) ÷ (100 − margen)</p>
       </div>
 
       <div class="grid grid-cols-2 gap-3 text-center">
@@ -115,12 +115,16 @@ export async function renderCalcularPrecio(el) {
     const margen = Number(margenInput?.value);
     const margenPct = Number.isFinite(margen) ? margen : 20;
     const costoQtz = factor > 0 ? costo / factor : 0;
-    const utilidad = costoQtz * (margenPct / 100);
-    const precioVenta = costoQtz + utilidad;
+    const denom = 100 - margenPct;
+    const precioVenta = denom > 0 ? (costoQtz * 100) / denom : 0;
+    const utilidad = precioVenta - costoQtz;
 
     if (costoQtzEl) costoQtzEl.textContent = formatQ(costoQtz);
-    if (precioEl) precioEl.textContent = formatQ(precioVenta);
-    if (utilidadEl) utilidadEl.textContent = formatQ(utilidad);
+    if (precioEl) {
+      precioEl.textContent = denom > 0 ? formatQ(precioVenta) : '—';
+      precioEl.style.color = denom > 0 ? '' : '#dc2626';
+    }
+    if (utilidadEl) utilidadEl.textContent = denom > 0 ? formatQ(utilidad) : '—';
     if (costoLabelEl) costoLabelEl.textContent = formatPesos(costo);
   };
 
