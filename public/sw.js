@@ -1,5 +1,5 @@
 /* Service Worker: instalable, sin precache, siempre red */
-const SW_VERSION = 'shop-store-v3-carmina-icons';
+const SW_VERSION = 'shop-store-v4-carmina-icons';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
