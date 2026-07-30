@@ -160,7 +160,10 @@ export const api = {
     tipoCambioGemini: () =>
       request('/settings/tipo-cambio-gemini', { method: 'POST', body: {}, timeoutMs: 60000 }),
     updateFactorCambio: (factor) =>
-      request('/settings/factor-cambio', { method: 'PUT', body: { VALOR: factor } }),
+      request('/settings/factor-cambio', {
+        method: 'PUT',
+        body: { VALOR: String(factor) },
+      }),
   },
 };
 

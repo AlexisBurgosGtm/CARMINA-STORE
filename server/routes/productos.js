@@ -67,7 +67,7 @@ router.post('/cotizar', async (req, res) => {
 router.get('/', async (_req, res) => {
   try {
     const rows = await query(`
-      SELECT p.CODPROD, p.DESPROD, p.CODPROV, p.LASTUPDATE, p.COSTO, p.PRECIO, p.FOTO,
+      SELECT p.CODPROD, p.DESPROD, p.CODPROV, p.LASTUPDATE, p.COSTO, p.PRECIO, p.FACTOR, p.FOTO,
              pr.NOMPROV
       FROM PRODUCTOS p
       LEFT JOIN PROVEEDORES pr ON pr.CODPROV = p.CODPROV
@@ -83,7 +83,7 @@ router.get('/', async (_req, res) => {
 router.get('/:codprod', async (req, res) => {
   try {
     const rows = await query(`
-      SELECT p.CODPROD, p.DESPROD, p.CODPROV, p.LASTUPDATE, p.COSTO, p.PRECIO, p.FOTO,
+      SELECT p.CODPROD, p.DESPROD, p.CODPROV, p.LASTUPDATE, p.COSTO, p.PRECIO, p.FACTOR, p.FOTO,
              pr.NOMPROV
       FROM PRODUCTOS p
       LEFT JOIN PROVEEDORES pr ON pr.CODPROV = p.CODPROV
@@ -123,7 +123,7 @@ router.get('/:codprod/foto', async (req, res) => {
 
 router.post('/', uploadSingleFoto, async (req, res) => {
   try {
-    const { CODPROD, DESPROD, CODPROV, COSTO, PRECIO } = req.body;
+    const { CODPROD, DESPROD, CODPROV, COSTO, PRECIO, FACTOR } = req.body;
     if (!CODPROD || !DESPROD || !CODPROV || PRECIO === undefined || COSTO === undefined) {
       return res.status(400).json({ error: 'Campos requeridos: CODPROD, DESPROD, CODPROV, COSTO, PRECIO' });
     }
@@ -144,6 +144,15 @@ router.post('/', uploadSingleFoto, async (req, res) => {
       return res.status(409).json({ error: 'Ya existe un producto con ese código' });
     }
 
+    let factorVal = Number(FACTOR);
+    if (!Number.isFinite(factorVal) || factorVal <= 0) {
+      const setting = await query('SELECT VALOR FROM SETTINGS WHERE OPCION = ?', [
+        'FACTOR CAMBIO MONEDA',
+      ]);
+      factorVal = setting[0] ? Number(setting[0].VALOR) : 2.2;
+      if (!Number.isFinite(factorVal) || factorVal <= 0) factorVal = 2.2;
+    }
+
     // En DB solo se guarda el nombre del archivo (basado en el código), nunca la imagen
     let fotoName = null;
     if (req.file) {
@@ -152,9 +161,17 @@ router.post('/', uploadSingleFoto, async (req, res) => {
     }
 
     await query(
-      `INSERT INTO PRODUCTOS (CODPROD, DESPROD, CODPROV, LASTUPDATE, COSTO, PRECIO, FOTO)
-       VALUES (?, ?, ?, NOW(), ?, ?, ?)`,
-      [codprod, DESPROD.trim(), CODPROV.trim(), Number(COSTO), Number(PRECIO), fotoName]
+      `INSERT INTO PRODUCTOS (CODPROD, DESPROD, CODPROV, LASTUPDATE, COSTO, PRECIO, FACTOR, FOTO)
+       VALUES (?, ?, ?, NOW(), ?, ?, ?, ?)`,
+      [
+        codprod,
+        DESPROD.trim(),
+        CODPROV.trim(),
+        Number(COSTO),
+        Number(PRECIO),
+        factorVal,
+        fotoName,
+      ]
     );
 
     res.status(201).json({ ok: true, FOTO: fotoName });

@@ -52,6 +52,19 @@ function calcUtilidad(costo, precio, factor) {
 function productForm(proveedores, product = null, factor = 2.2, defaultCodprov = '') {
   const isEdit = !!product;
   const selectedProv = product?.CODPROV || defaultCodprov || '';
+  const formFactor = Number(product?.FACTOR) > 0 ? Number(product.FACTOR) : factor;
+  const initialMargen = (() => {
+    if (!product) return 20;
+    const costo = Number(product.COSTO) || 0;
+    const precio = Number(product.PRECIO) || 0;
+    const costoQtz = formFactor > 0 ? costo / formFactor : 0;
+    if (precio <= 0 || costoQtz <= 0 || precio <= costoQtz) return 20;
+    const m = 100 - (costoQtz * 100) / precio;
+    return Number.isFinite(m) && m > 0 && m < 100
+      ? Math.round(m * 10) / 10
+      : 20;
+  })();
+
   return `
     <div class="flex items-start justify-between gap-3 mb-4">
       <div class="min-w-0">
@@ -60,7 +73,8 @@ function productForm(proveedores, product = null, factor = 2.2, defaultCodprov =
       </div>
       <button id="modal-close" class="btn btn-ghost btn-icon shrink-0"><i class="fa-solid fa-xmark"></i></button>
     </div>
-    <form id="product-form" class="space-y-3" autocomplete="off" data-factor="${esc(factor)}">
+    <form id="product-form" class="space-y-3" autocomplete="off" data-factor="${esc(formFactor)}">
+      <input type="hidden" name="FACTOR" id="input-factor" value="${esc(formFactor)}" />
       <div>
         <label class="label">Código</label>
         <div class="code-with-scan">
@@ -96,6 +110,13 @@ function productForm(proveedores, product = null, factor = 2.2, defaultCodprov =
             </div>
             <span id="costo-qtz" class="costo-qtz" title="Costo ÷ factor">Q 0.00</span>
           </div>
+          <div class="mt-2">
+            <label class="label" for="input-margen">Margen ganancia <span id="margen-label-pct">${esc(initialMargen)}</span> %</label>
+            <div class="money-input">
+              <span class="money-prefix" title="Porcentaje">%</span>
+              <input id="input-margen" name="MARGEN" type="number" step="0.1" min="0" max="99.9" class="input-field" autocomplete="off" value="${esc(initialMargen)}" />
+            </div>
+          </div>
         </div>
         <div>
           <label class="label">Precio</label>
@@ -129,17 +150,46 @@ function productForm(proveedores, product = null, factor = 2.2, defaultCodprov =
   `;
 }
 
-function bindUtilidadCalc(factor) {
+function bindUtilidadCalc(factor, { preferPrecio = false } = {}) {
   const costoInput = document.getElementById('input-costo');
   const precioInput = document.getElementById('input-precio');
+  const margenInput = document.getElementById('input-margen');
+  const margenLabel = document.getElementById('margen-label-pct');
   const montoEl = document.getElementById('utilidad-monto');
   const pctEl = document.getElementById('utilidad-pct');
   const costoQtzEl = document.getElementById('costo-qtz');
   if (!costoInput || !precioInput || !montoEl || !pctEl) return;
 
-  const recalc = () => {
-    const { costoQtz, utilidad, pct } = calcUtilidad(costoInput.value, precioInput.value, factor);
+  let updatingFromMargen = false;
 
+  const applyFromMargen = () => {
+    const costo = Number(costoInput.value) || 0;
+    const margen = Number(margenInput?.value);
+    const margenPct = Number.isFinite(margen) ? margen : 20;
+    if (margenLabel) margenLabel.textContent = String(margenPct);
+    const costoQtz = factor > 0 ? costo / factor : 0;
+    const denom = 100 - margenPct;
+    const precioVenta = denom > 0 ? (costoQtz * 100) / denom : 0;
+    const utilidad = precioVenta - costoQtz;
+
+    if (costoQtzEl) costoQtzEl.textContent = formatQ(costoQtz);
+
+    if (denom > 0) {
+      updatingFromMargen = true;
+      precioInput.value = (Math.round(precioVenta * 100) / 100).toFixed(2);
+      updatingFromMargen = false;
+      montoEl.textContent = formatQ(utilidad);
+      montoEl.style.color = utilidad < 0 ? '#dc2626' : '#134e4a';
+      pctEl.textContent = `${margenPct.toLocaleString('es-GT', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      })}%`;
+    }
+  };
+
+  const applyFromPrecio = () => {
+    if (updatingFromMargen) return;
+    const { costoQtz, utilidad, pct } = calcUtilidad(costoInput.value, precioInput.value, factor);
     if (costoQtzEl) costoQtzEl.textContent = formatQ(costoQtz);
     montoEl.textContent = formatQ(utilidad);
     montoEl.style.color = utilidad < 0 ? '#dc2626' : '#134e4a';
@@ -147,11 +197,29 @@ function bindUtilidadCalc(factor) {
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     })}%`;
+
+    if (margenInput && precioInput.value && costoQtz > 0) {
+      const precio = Number(precioInput.value) || 0;
+      if (precio > costoQtz) {
+        const m = 100 - (costoQtz * 100) / precio;
+        if (Number.isFinite(m) && m > 0 && m < 100) {
+          const rounded = Math.round(m * 10) / 10;
+          margenInput.value = String(rounded);
+          if (margenLabel) margenLabel.textContent = String(rounded);
+        }
+      }
+    }
   };
 
-  costoInput.addEventListener('input', recalc);
-  precioInput.addEventListener('input', recalc);
-  recalc();
+  costoInput.addEventListener('input', applyFromMargen);
+  margenInput?.addEventListener('input', applyFromMargen);
+  precioInput.addEventListener('input', applyFromPrecio);
+
+  if (preferPrecio && String(precioInput.value || '').trim() !== '') {
+    applyFromPrecio();
+  } else {
+    applyFromMargen();
+  }
 }
 
 function setFotoFileInput(file) {
@@ -441,9 +509,10 @@ function openCotizarTextoModal() {
 function openProductEditor(proveedores, product = null, options = {}) {
   const defaultCodprov = options.defaultCodprov || '';
   loadFactorCambio().then((factor) => {
-    openModal(productForm(proveedores, product, factor, defaultCodprov));
+    const formFactor = Number(product?.FACTOR) > 0 ? Number(product.FACTOR) : factor;
+    openModal(productForm(proveedores, product, formFactor, defaultCodprov));
     document.getElementById('modal-close-2')?.addEventListener('click', closeModal);
-    bindUtilidadCalc(factor);
+    bindUtilidadCalc(formFactor, { preferPrecio: !!product });
 
     document.getElementById('btn-scan-barcode')?.addEventListener('click', () => {
       openBarcodeScanner((code) => {
@@ -517,6 +586,7 @@ function openProductEditor(proveedores, product = null, options = {}) {
       fd.append('CODPROV', form.CODPROV.value);
       fd.append('COSTO', form.COSTO.value);
       fd.append('PRECIO', form.PRECIO.value);
+      if (form.FACTOR?.value) fd.append('FACTOR', form.FACTOR.value);
       if (file) fd.append('foto', file);
 
       const btn = form.querySelector('[type=submit]');

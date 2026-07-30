@@ -36,6 +36,7 @@ async function initDatabase() {
       LASTUPDATE DATETIME NOT NULL,
       COSTO DECIMAL(12,2) NOT NULL DEFAULT 0,
       PRECIO DECIMAL(12,2) NOT NULL DEFAULT 0,
+      FACTOR DECIMAL(12,4) NULL,
       FOTO VARCHAR(255) NULL,
       CONSTRAINT fk_prod_prov FOREIGN KEY (CODPROV)
         REFERENCES PROVEEDORES(CODPROV)
@@ -49,6 +50,12 @@ async function initDatabase() {
     'PRODUCTOS',
     'COSTO',
     'COSTO DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER LASTUPDATE'
+  );
+
+  await ensureColumn(
+    'PRODUCTOS',
+    'FACTOR',
+    'FACTOR DECIMAL(12,4) NULL AFTER PRECIO'
   );
 
   await query(`

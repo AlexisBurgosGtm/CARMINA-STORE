@@ -1,4 +1,4 @@
-﻿import { isAuthenticated, isAdmin, getUser, clearSession, api } from './api.js';
+﻿import { isAuthenticated, isAdmin, getUser, clearSession, api, toast } from './api.js';
 
 const routes = {};
 
@@ -298,15 +298,22 @@ export async function openTipoCambioSync(onUpdated) {
     document.getElementById('btn-tc-cancel')?.addEventListener('click', closeModal);
     document.getElementById('btn-tc-update')?.addEventListener('click', async () => {
       const btn = document.getElementById('btn-tc-update');
-      if (btn) btn.disabled = true;
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner"></span> Guardando...`;
+      }
       try {
         const saved = await api.settings.updateFactorCambio(factor);
+        const nuevo = Number(saved.VALOR);
         toast(`Factor actualizado a ${saved.VALOR}`, 'success');
         closeModal();
-        if (typeof onUpdated === 'function') onUpdated(Number(saved.VALOR));
+        if (typeof onUpdated === 'function') onUpdated(nuevo);
       } catch (err) {
-        toast(err.message, 'error');
-        if (btn) btn.disabled = false;
+        toast(err.message || 'No se pudo actualizar el factor', 'error');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Sí, actualizar`;
+        }
       }
     });
   } catch (err) {
