@@ -7,6 +7,7 @@ import { renderUsuarios } from './views/usuarios.js';
 import { renderConfiguraciones } from './views/configuraciones.js';
 import { renderCalcularPrecio } from './views/calcular-precio.js';
 import { renderPublicaciones } from './views/publicaciones.js';
+import { renderWhatsapp } from './views/whatsapp.js';
 
 register('/login', renderLogin);
 register('/catalogo', renderCatalogo);
@@ -14,6 +15,7 @@ register('/publicaciones', renderPublicaciones);
 register('/calcular-precio', renderCalcularPrecio);
 register('/proveedores', renderProveedores);
 register('/usuarios', renderUsuarios);
+register('/whatsapp', renderWhatsapp);
 register('/configuraciones', renderConfiguraciones);
 register('/', async () => {
   navigate(isAuthenticated() ? '/catalogo' : '/login');

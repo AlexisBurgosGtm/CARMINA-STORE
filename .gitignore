@@ -6,3 +6,5 @@ node_modules/
 uploads/
 dist/
 .vscode/
+server/data/whatsapp-auth/
+server/data/whatsapp-contacts.json

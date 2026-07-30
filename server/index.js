@@ -26,6 +26,7 @@ app.use('/api/proveedores', proveedoresRoutes);
 app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/publicaciones', require('./routes/publicaciones'));
+app.use('/api/whatsapp', require('./routes/whatsapp'));
 
 const publicDir = path.join(__dirname, '..', 'public');
 

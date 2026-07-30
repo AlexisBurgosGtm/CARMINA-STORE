@@ -54,6 +54,9 @@ function listHtml(items) {
           <button class="btn btn-primary btn-pub-share" type="button" title="Publicar">
             <i class="fa-solid fa-share-nodes"></i> Publicar
           </button>
+          <button class="btn btn-wa btn-pub-wa" type="button" title="Publicar WhatsApp">
+            <i class="fa-brands fa-whatsapp"></i> Publicar WhatsApp
+          </button>
           <button class="btn btn-danger btn-icon btn-pub-del" type="button" title="Eliminar">
             <i class="fa-solid fa-trash"></i>
           </button>
@@ -227,6 +230,19 @@ export async function renderPublicaciones(el) {
           toast('Publicado', 'success');
         } catch (err) {
           toast(err.message || 'Publicar aún no está implementado', 'info');
+        }
+      });
+
+      row.querySelector('.btn-pub-wa')?.addEventListener('click', async () => {
+        const btn = row.querySelector('.btn-pub-wa');
+        if (btn) btn.disabled = true;
+        try {
+          await api.publicaciones.publicarWhatsapp(id);
+          toast('Publicado en Estado de WhatsApp', 'success');
+        } catch (err) {
+          toast(err.message || 'No se pudo publicar en WhatsApp', 'error');
+        } finally {
+          if (btn) btn.disabled = false;
         }
       });
     });

@@ -172,7 +172,11 @@ export function shell(contentHtml, { title = '', fab = null, fabSearch = false, 
           ${admin ? `
           <a href="#/usuarios" class="menu-item ${active === 'usuarios' ? 'active' : ''}">
             <i class="fa-solid fa-users-gear"></i> Usuarios
+          </a>` : ''}
+          <a href="#/whatsapp" class="menu-item ${active === 'whatsapp' ? 'active' : ''}">
+            <i class="fa-brands fa-whatsapp"></i> WhatsApp
           </a>
+          ${admin ? `
           <a href="#/configuraciones" class="menu-item ${active === 'configuraciones' ? 'active' : ''}">
             <i class="fa-solid fa-sliders"></i> Configuraciones
           </a>` : ''}

@@ -141,6 +141,18 @@ export const api = {
     create: (body) => request('/publicaciones', { method: 'POST', body }),
     remove: (id) => request(`/publicaciones/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     publicar: (id) => request(`/publicaciones/${encodeURIComponent(id)}/publicar`, { method: 'POST', body: {} }),
+    publicarWhatsapp: (id) =>
+      request(`/publicaciones/${encodeURIComponent(id)}/whatsapp`, {
+        method: 'POST',
+        body: {},
+        timeoutMs: 120000,
+      }),
+  },
+
+  whatsapp: {
+    status: () => request('/whatsapp/status'),
+    connect: () => request('/whatsapp/connect', { method: 'POST', body: {}, timeoutMs: 60000 }),
+    disconnect: () => request('/whatsapp/disconnect', { method: 'POST', body: {}, timeoutMs: 30000 }),
   },
 
   usuarios: {
