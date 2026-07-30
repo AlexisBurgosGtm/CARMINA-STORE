@@ -6,6 +6,7 @@ import {
   closeModal,
   openStackedModal,
   confirmDeleteWithClave,
+  navigate,
 } from '../router.js';
 import { openBarcodeScanner } from '../barcode-scanner.js';
 
@@ -48,8 +49,9 @@ function calcUtilidad(costo, precio, factor) {
   return { costoQtz, utilidad, pct };
 }
 
-function productForm(proveedores, product = null, factor = 2.2) {
+function productForm(proveedores, product = null, factor = 2.2, defaultCodprov = '') {
   const isEdit = !!product;
+  const selectedProv = product?.CODPROV || defaultCodprov || '';
   return `
     <div class="flex items-start justify-between gap-3 mb-4">
       <div class="min-w-0">
@@ -79,7 +81,7 @@ function productForm(proveedores, product = null, factor = 2.2) {
         <select name="CODPROV" class="input-field" required autocomplete="off">
           <option value="">Seleccionar...</option>
           ${proveedores.map((p) => `
-            <option value="${esc(p.CODPROV)}" ${product?.CODPROV === p.CODPROV ? 'selected' : ''}>
+            <option value="${esc(p.CODPROV)}" ${String(selectedProv) === String(p.CODPROV) ? 'selected' : ''}>
               ${esc(p.NOMPROV)}
             </option>`).join('')}
         </select>
@@ -436,9 +438,10 @@ function openCotizarTextoModal() {
   });
 }
 
-function openProductEditor(proveedores, product = null) {
+function openProductEditor(proveedores, product = null, options = {}) {
+  const defaultCodprov = options.defaultCodprov || '';
   loadFactorCambio().then((factor) => {
-    openModal(productForm(proveedores, product, factor));
+    openModal(productForm(proveedores, product, factor, defaultCodprov));
     document.getElementById('modal-close-2')?.addEventListener('click', closeModal);
     bindUtilidadCalc(factor);
 
@@ -551,23 +554,19 @@ function openProductEditor(proveedores, product = null) {
 }
 
 let _reloadCatalogo = null;
-let _catalogFilters = { proveedor: '', q: '' };
+let _productSearchQ = '';
 
 function handleReloadCatalogo() {
   _reloadCatalogo?.();
 }
 
-function filterProductos(productos, { proveedor, q }) {
+function filterProductos(productos, q) {
   const query = String(q || '').trim().toLowerCase();
+  if (!query) return productos;
   return productos.filter((p) => {
-    if (proveedor && String(p.CODPROV) !== String(proveedor)) return false;
-    if (!query) return true;
-    const haystack = [
-      p.CODPROD,
-      p.DESPROD,
-      p.NOMPROV,
-      p.CODPROV,
-    ].map((v) => String(v || '').toLowerCase()).join(' ');
+    const haystack = [p.CODPROD, p.DESPROD, p.NOMPROV, p.CODPROV]
+      .map((v) => String(v || '').toLowerCase())
+      .join(' ');
     return haystack.includes(query);
   });
 }
@@ -577,7 +576,7 @@ function productListHtml(productos, factor) {
     return `<div class="empty-state glass rounded-3xl" id="catalog-empty">
       <i class="fa-solid fa-box-open text-3xl mb-3 text-brand-500"></i>
       <p>No hay productos que coincidan</p>
-      <p class="text-sm mt-1">Prueba otro proveedor o texto de búsqueda</p>
+      <p class="text-sm mt-1">Prueba otro texto de búsqueda o agrega uno nuevo</p>
     </div>`;
   }
 
@@ -595,7 +594,7 @@ function productListHtml(productos, factor) {
           </button>
           <div class="product-row-info">
             <p class="font-semibold text-slate-800 break-words">${esc(p.DESPROD)}</p>
-            <p class="text-xs text-slate-500 truncate">${esc(p.CODPROD)} · ${esc(p.NOMPROV || p.CODPROV)}</p>
+            <p class="text-xs text-slate-500 truncate">${esc(p.CODPROD)}</p>
             <div class="product-meta">
               <span class="text-sm font-bold text-brand-700">${formatQ(p.PRECIO)}</span>
               <span class="product-util">Utilidad: ${formatQ(utilidad)}</span>
@@ -615,7 +614,34 @@ function productListHtml(productos, factor) {
   }).join('');
 }
 
-function bindProductRowActions(el, productos, paint) {
+function proveedoresListHtml(proveedores, counts = {}) {
+  if (!proveedores.length) {
+    return `<div class="empty-state glass rounded-3xl">
+      <i class="fa-solid fa-truck-field text-3xl mb-3 text-brand-500"></i>
+      <p>No hay proveedores</p>
+      <p class="text-sm mt-1">Registra proveedores en el menú Proveedores</p>
+    </div>`;
+  }
+
+  return proveedores.map((p) => {
+    const n = counts[p.CODPROV] || 0;
+    return `
+    <button type="button" class="data-row p-4 sm:p-5 w-full text-left prov-pick-item" data-codprov="${esc(p.CODPROV)}">
+      <div class="flex items-center gap-3">
+        <div class="thumb flex items-center justify-center text-brand-700 shrink-0">
+          <i class="fa-solid fa-truck-field"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="font-semibold text-slate-800 break-words">${esc(p.NOMPROV)}</p>
+          <p class="text-xs text-slate-500 mt-0.5">${esc(p.CODPROV)} · ${n} producto(s)</p>
+        </div>
+        <i class="fa-solid fa-chevron-right text-slate-400 shrink-0"></i>
+      </div>
+    </button>`;
+  }).join('');
+}
+
+function bindProductRowActions(el, productos, paint, defaultCodprov) {
   el.querySelectorAll('.data-row').forEach((row) => {
     const cod = row.dataset.cod;
     const product = productos.find((p) => p.CODPROD === cod);
@@ -629,7 +655,7 @@ function bindProductRowActions(el, productos, paint) {
 
     row.querySelector('.btn-edit')?.addEventListener('click', async () => {
       const proveedores = await loadProveedores();
-      openProductEditor(proveedores, product);
+      openProductEditor(proveedores, product, { defaultCodprov });
     });
 
     row.querySelector('.btn-del')?.addEventListener('click', async () => {
@@ -648,146 +674,200 @@ function bindProductRowActions(el, productos, paint) {
   });
 }
 
-export async function renderCatalogo(el) {
-  async function paint() {
+async function paintProveedores(el) {
+  el.innerHTML = shell(`
+    <div class="mb-4">
+      <h1 class="font-display text-2xl font-bold text-brand-900">Catálogo</h1>
+      <p class="text-sm text-slate-500">Selecciona un proveedor</p>
+    </div>
+    <div class="glass rounded-3xl p-8 text-center text-slate-500">
+      <span class="spinner inline-block" style="border-color:rgba(15,118,110,.25);border-top-color:#0f766e"></span>
+    </div>
+  `, { title: 'Catálogo', fab: false, fabSearch: true, active: 'catalogo' });
+  bindShell(null, openCotizarTextoModal);
+
+  let proveedores = [];
+  let productos = [];
+  try {
+    [proveedores, productos] = await Promise.all([
+      loadProveedores(),
+      api.productos.list(),
+    ]);
+  } catch (err) {
+    toast(err.message, 'error');
     el.innerHTML = shell(`
       <div class="mb-4">
         <h1 class="font-display text-2xl font-bold text-brand-900">Catálogo</h1>
-        <p class="text-sm text-slate-500">Cargando productos...</p>
       </div>
-      <div class="glass rounded-3xl p-8 text-center text-slate-500">
-        <span class="spinner inline-block" style="border-color:rgba(15,118,110,.25);border-top-color:#0f766e"></span>
+      <div class="empty-state glass rounded-3xl">
+        <p class="text-red-600 font-semibold mb-2">No se pudo cargar</p>
+        <p class="text-sm">${esc(err.message)}</p>
+        <button id="btn-retry-cat" class="btn btn-primary mt-4">Reintentar</button>
       </div>
-    `, { title: 'Productos', fab: true, fabSearch: true, active: 'catalogo' });
-    bindShell(() => {}, openCotizarTextoModal);
+    `, { title: 'Catálogo', fab: false, fabSearch: true, active: 'catalogo' });
+    bindShell(null, openCotizarTextoModal);
+    document.getElementById('btn-retry-cat')?.addEventListener('click', () => paintProveedores(el));
+    return;
+  }
 
-    let productos = [];
-    let proveedores = [];
-    let factor = 2.2;
+  const counts = {};
+  productos.forEach((p) => {
+    const k = String(p.CODPROV);
+    counts[k] = (counts[k] || 0) + 1;
+  });
+
+  el.innerHTML = shell(`
+    <div class="mb-4">
+      <h1 class="font-display text-2xl font-bold text-brand-900">Catálogo</h1>
+      <p class="text-sm text-slate-500">${proveedores.length} proveedor(es)</p>
+    </div>
+    <div class="space-y-2">${proveedoresListHtml(proveedores, counts)}</div>
+  `, { title: 'Catálogo', fab: false, fabSearch: true, active: 'catalogo' });
+
+  bindShell(null, openCotizarTextoModal);
+
+  el.querySelectorAll('.prov-pick-item').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const cod = btn.dataset.codprov;
+      _productSearchQ = '';
+      navigate(`/catalogo?prov=${encodeURIComponent(cod)}`);
+    });
+  });
+}
+
+async function paintProductosProveedor(el, codprov) {
+  el.innerHTML = shell(`
+    <div class="mb-4">
+      <h1 class="font-display text-2xl font-bold text-brand-900">Productos</h1>
+      <p class="text-sm text-slate-500">Cargando...</p>
+    </div>
+    <div class="glass rounded-3xl p-8 text-center text-slate-500">
+      <span class="spinner inline-block" style="border-color:rgba(15,118,110,.25);border-top-color:#0f766e"></span>
+    </div>
+  `, { title: 'Productos', fab: true, fabSearch: true, active: 'catalogo' });
+  bindShell(() => {}, openCotizarTextoModal);
+
+  let proveedores = [];
+  let productos = [];
+  let factor = 2.2;
+  try {
+    [proveedores, productos, factor] = await Promise.all([
+      loadProveedores(),
+      api.productos.list(),
+      loadFactorCambio(),
+    ]);
+  } catch (err) {
+    toast(err.message, 'error');
+    el.innerHTML = shell(`
+      <div class="mb-4">
+        <button type="button" id="btn-back-prov" class="btn btn-ghost mb-2"><i class="fa-solid fa-arrow-left"></i> Proveedores</button>
+        <h1 class="font-display text-2xl font-bold text-brand-900">Productos</h1>
+      </div>
+      <div class="empty-state glass rounded-3xl">
+        <p class="text-red-600 font-semibold mb-2">No se pudo cargar</p>
+        <p class="text-sm">${esc(err.message)}</p>
+        <button id="btn-retry-cat" class="btn btn-primary mt-4">Reintentar</button>
+      </div>
+    `, { title: 'Productos', fab: false, fabSearch: true, active: 'catalogo' });
+    bindShell(null, openCotizarTextoModal);
+    document.getElementById('btn-back-prov')?.addEventListener('click', () => navigate('/catalogo'));
+    document.getElementById('btn-retry-cat')?.addEventListener('click', () => paintProductosProveedor(el, codprov));
+    return;
+  }
+
+  const proveedor = proveedores.find((p) => String(p.CODPROV) === String(codprov));
+  if (!proveedor) {
+    toast('Proveedor no encontrado', 'error');
+    navigate('/catalogo');
+    return;
+  }
+
+  const delProveedor = productos.filter((p) => String(p.CODPROV) === String(codprov));
+
+  const openCreate = async () => {
     try {
-      [productos, proveedores, factor] = await Promise.all([
-        api.productos.list(),
-        loadProveedores(),
-        loadFactorCambio(),
-      ]);
+      const provs = proveedores.length ? proveedores : await loadProveedores();
+      if (!provs.length) {
+        toast('Primero registra al menos un proveedor', 'info');
+        return;
+      }
+      openProductEditor(provs, null, { defaultCodprov: codprov });
     } catch (err) {
       toast(err.message, 'error');
-      el.innerHTML = shell(`
-        <div class="mb-4">
-          <h1 class="font-display text-2xl font-bold text-brand-900">Catálogo</h1>
-        </div>
-        <div class="empty-state glass rounded-3xl">
-          <p class="text-red-600 font-semibold mb-2">No se pudo cargar el catálogo</p>
-          <p class="text-sm">${esc(err.message)}</p>
-          <button id="btn-retry-cat" class="btn btn-primary mt-4">Reintentar</button>
-        </div>
-      `, { title: 'Productos', fab: true, fabSearch: true, active: 'catalogo' });
-      bindShell(async () => {
-        try {
-          const provs = await loadProveedores();
-          if (!provs.length) {
-            toast('Primero registra al menos un proveedor', 'info');
-            return;
-          }
-          openProductEditor(provs);
-        } catch (e) {
-          toast(e.message, 'error');
-        }
-      }, openCotizarTextoModal);
-      document.getElementById('btn-retry-cat')?.addEventListener('click', paint);
-      return;
     }
+  };
 
-    const openCreate = async () => {
-      try {
-        const provs = proveedores.length ? proveedores : await loadProveedores();
-        if (!provs.length) {
-          toast('Primero registra al menos un proveedor', 'info');
-          return;
-        }
-        openProductEditor(provs);
-      } catch (err) {
-        toast(err.message, 'error');
-      }
-    };
+  const filtered = filterProductos(delProveedor, _productSearchQ);
 
-    if (!productos.length) {
-      el.innerHTML = shell(`
-        <div class="mb-4">
-          <h1 class="font-display text-2xl font-bold text-brand-900">Catálogo</h1>
-          <p class="text-sm text-slate-500">0 producto(s)</p>
-        </div>
-        <div class="empty-state glass rounded-3xl">
-          <i class="fa-solid fa-box-open text-3xl mb-3 text-brand-500"></i>
-          <p>No hay productos aún</p>
-          <p class="text-sm mt-1">Usa el botón + para agregar</p>
-        </div>
-      `, { title: 'Productos', fab: true, fabSearch: true, active: 'catalogo' });
-      bindShell(openCreate, openCotizarTextoModal);
-      return;
+  el.innerHTML = shell(`
+    <div class="mb-4">
+      <button type="button" id="btn-back-prov" class="btn btn-ghost mb-2">
+        <i class="fa-solid fa-arrow-left"></i> Proveedores
+      </button>
+      <h1 class="font-display text-2xl font-bold text-brand-900">${esc(proveedor.NOMPROV)}</h1>
+      <p class="text-sm text-slate-500" id="catalog-count">${filtered.length} de ${delProveedor.length} producto(s)</p>
+    </div>
+    <div class="mb-3">
+      <label class="label" for="filter-buscar">Buscar</label>
+      <div class="catalog-search-wrap">
+        <i class="fa-solid fa-magnifying-glass catalog-search-icon" aria-hidden="true"></i>
+        <input id="filter-buscar" class="input-field catalog-search-input" type="search"
+          placeholder="Código, descripción..." autocomplete="off"
+          value="${esc(_productSearchQ)}" />
+      </div>
+    </div>
+    <div class="space-y-2" id="product-list">${
+      delProveedor.length
+        ? productListHtml(filtered, factor)
+        : `<div class="empty-state glass rounded-3xl">
+            <i class="fa-solid fa-box-open text-3xl mb-3 text-brand-500"></i>
+            <p>No hay productos de este proveedor</p>
+            <p class="text-sm mt-1">Usa el botón + para agregar</p>
+          </div>`
+    }</div>
+  `, { title: proveedor.NOMPROV, fab: true, fabSearch: true, active: 'catalogo' });
+
+  bindShell(openCreate, openCotizarTextoModal);
+
+  document.getElementById('btn-back-prov')?.addEventListener('click', () => {
+    _productSearchQ = '';
+    navigate('/catalogo');
+  });
+
+  const listEl = document.getElementById('product-list');
+  const countEl = document.getElementById('catalog-count');
+  const searchInput = document.getElementById('filter-buscar');
+
+  const applySearch = () => {
+    _productSearchQ = searchInput?.value || '';
+    const next = filterProductos(delProveedor, _productSearchQ);
+    if (listEl) {
+      listEl.innerHTML = delProveedor.length
+        ? productListHtml(next, factor)
+        : listEl.innerHTML;
+      bindProductRowActions(listEl, delProveedor, () => paintProductosProveedor(el, codprov), codprov);
     }
+    if (countEl) {
+      countEl.textContent = `${next.length} de ${delProveedor.length} producto(s)`;
+    }
+  };
 
-    const proveedorOptions = [
-      `<option value="">Todos</option>`,
-      ...proveedores.map((p) => `
-        <option value="${esc(p.CODPROV)}" ${String(_catalogFilters.proveedor) === String(p.CODPROV) ? 'selected' : ''}>
-          ${esc(p.NOMPROV)}
-        </option>`),
-    ].join('');
+  searchInput?.addEventListener('input', applySearch);
 
-    const filtered = filterProductos(productos, _catalogFilters);
+  if (delProveedor.length && listEl) {
+    bindProductRowActions(listEl, delProveedor, () => paintProductosProveedor(el, codprov), codprov);
+  }
+}
 
-    el.innerHTML = shell(`
-      <div class="mb-4">
-        <h1 class="font-display text-2xl font-bold text-brand-900">Catálogo</h1>
-        <p class="text-sm text-slate-500" id="catalog-count">${filtered.length} de ${productos.length} producto(s)</p>
-      </div>
-      <div class="catalog-filters mb-3">
-        <div class="catalog-filter-prov">
-          <label class="label" for="filter-proveedor">Proveedor</label>
-          <select id="filter-proveedor" class="input-field" autocomplete="off">
-            ${proveedorOptions}
-          </select>
-        </div>
-        <div class="catalog-filter-search">
-          <label class="label" for="filter-buscar">Buscar</label>
-          <div class="catalog-search-wrap">
-            <i class="fa-solid fa-magnifying-glass catalog-search-icon" aria-hidden="true"></i>
-            <input id="filter-buscar" class="input-field catalog-search-input" type="search"
-              placeholder="Código, descripción..." autocomplete="off"
-              value="${esc(_catalogFilters.q)}" />
-          </div>
-        </div>
-      </div>
-      <div class="space-y-2" id="product-list">${productListHtml(filtered, factor)}</div>
-    `, { title: 'Productos', fab: true, fabSearch: true, active: 'catalogo' });
+export async function renderCatalogo(el, params = {}) {
+  const codprov = params.prov ? String(params.prov).trim() : '';
 
-    bindShell(openCreate, openCotizarTextoModal);
-
-    const listEl = document.getElementById('product-list');
-    const countEl = document.getElementById('catalog-count');
-    const provSelect = document.getElementById('filter-proveedor');
-    const searchInput = document.getElementById('filter-buscar');
-
-    const applyFilters = () => {
-      _catalogFilters = {
-        proveedor: provSelect?.value || '',
-        q: searchInput?.value || '',
-      };
-      const next = filterProductos(productos, _catalogFilters);
-      if (listEl) {
-        listEl.innerHTML = productListHtml(next, factor);
-        bindProductRowActions(listEl, productos, paint);
-      }
-      if (countEl) {
-        countEl.textContent = `${next.length} de ${productos.length} producto(s)`;
-      }
-    };
-
-    provSelect?.addEventListener('change', applyFilters);
-    searchInput?.addEventListener('input', applyFilters);
-
-    bindProductRowActions(listEl || el, productos, paint);
+  async function paint() {
+    if (codprov) {
+      await paintProductosProveedor(el, codprov);
+    } else {
+      await paintProveedores(el);
+    }
   }
 
   _reloadCatalogo = paint;
