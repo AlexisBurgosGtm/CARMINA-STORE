@@ -80,6 +80,26 @@ router.get('/', async (_req, res) => {
   }
 });
 
+router.get('/:codprod/exists', async (req, res) => {
+  try {
+    const codprod = String(req.params.codprod || '').trim();
+    if (!codprod) {
+      return res.status(400).json({ error: 'Código requerido', exists: false });
+    }
+    const rows = await query(
+      'SELECT CODPROD FROM PRODUCTOS WHERE CODPROD = ? OR UPPER(CODPROD) = UPPER(?) LIMIT 1',
+      [codprod, codprod]
+    );
+    res.json({
+      exists: rows.length > 0,
+      CODPROD: rows[0]?.CODPROD || null,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al verificar código', exists: false });
+  }
+});
+
 router.get('/:codprod', async (req, res) => {
   try {
     const rows = await query(`

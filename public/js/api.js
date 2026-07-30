@@ -102,6 +102,7 @@ export const api = {
   productos: {
     list: () => request('/productos'),
     get: (id) => request(`/productos/${encodeURIComponent(id)}`),
+    exists: (id) => request(`/productos/${encodeURIComponent(id)}/exists`),
     create: (formData) =>
       request('/productos', { method: 'POST', body: formData, timeoutMs: 10 * 60 * 1000 }),
     update: (id, formData) =>

@@ -515,14 +515,30 @@ function openProductEditor(proveedores, product = null, options = {}) {
     bindUtilidadCalc(formFactor, { preferPrecio: !!product });
 
     document.getElementById('btn-scan-barcode')?.addEventListener('click', () => {
-      openBarcodeScanner((code) => {
+      openBarcodeScanner(async (code) => {
         const input = document.getElementById('input-codprod');
         if (input) {
           input.value = code;
           input.dispatchEvent(new Event('input', { bubbles: true }));
+          await checkCodigoDuplicado(input.value, { notify: true });
         }
       });
     });
+
+    if (!product) {
+      const codeInput = document.getElementById('input-codprod');
+      let checkTimer = null;
+      const scheduleCheck = () => {
+        clearTimeout(checkTimer);
+        checkTimer = setTimeout(() => {
+          checkCodigoDuplicado(codeInput?.value, { notify: true });
+        }, 400);
+      };
+      codeInput?.addEventListener('blur', () => {
+        checkCodigoDuplicado(codeInput.value, { notify: true });
+      });
+      codeInput?.addEventListener('change', scheduleCheck);
+    }
 
     document.getElementById('btn-take-photo')?.addEventListener('click', () => {
       openCameraCapture();
@@ -574,6 +590,14 @@ function openProductEditor(proveedores, product = null, options = {}) {
         return;
       }
 
+      if (!product) {
+        const duplicate = await checkCodigoDuplicado(codprod, { notify: true });
+        if (duplicate) {
+          form.CODPROD?.focus();
+          return;
+        }
+      }
+
       const file = form.foto.files[0];
       if (file && file.size > MAX_FOTO_BYTES) {
         toast(`La foto no puede superar ${MAX_FOTO_MB} MB`, 'error');
@@ -607,20 +631,37 @@ function openProductEditor(proveedores, product = null, options = {}) {
       } catch (err) {
         showUploadLoader(false);
         btn.disabled = false;
-        if (/ya existe|mismo código|código de producto ya existe/i.test(err.message)) {
-          await window.Swal?.fire({
-            icon: 'warning',
-            title: 'Código duplicado',
-            text: err.message,
-            confirmButtonText: 'Aceptar',
-            confirmButtonColor: '#0f766e',
-          });
+        if (/ya existe|mismo código|código de producto ya existe|código duplicado/i.test(err.message)) {
+          toast(err.message || 'Ya existe un producto con ese código', 'error');
+          form.CODPROD?.focus();
         } else {
           toast(err.message, 'error');
         }
       }
     });
   });
+}
+
+/** @returns {Promise<boolean>} true si el código ya existe */
+async function checkCodigoDuplicado(codprod, { notify = false } = {}) {
+  const code = String(codprod || '').trim();
+  if (!code) return false;
+  try {
+    const data = await api.productos.exists(code);
+    if (data?.exists) {
+      if (notify) {
+        toast(
+          `Ya existe un producto con el código "${data.CODPROD || code}"`,
+          'error'
+        );
+      }
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.warn('No se pudo verificar el código:', err);
+    return false;
+  }
 }
 
 let _reloadCatalogo = null;
