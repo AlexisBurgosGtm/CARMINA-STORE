@@ -104,7 +104,7 @@ export async function startRouter(mountEl) {
   await resolve();
 }
 
-export function shell(contentHtml, { title = '', fab = null, fabSearch = false, active = '' } = {}) {
+export function shell(contentHtml, { title = '', fab = null, fabSearch = false, fabCamera = false, active = '' } = {}) {
   const user = getUser();
   const admin = isAdmin();
 
@@ -138,6 +138,7 @@ export function shell(contentHtml, { title = '', fab = null, fabSearch = false, 
       </main>
 
       ${fabSearch ? `<button id="fab-search" class="fab-search" type="button" title="Cotizar con IA" aria-label="Cotizar con IA"><i class="fa-solid fa-magnifying-glass"></i></button>` : ''}
+      ${fabCamera ? `<button id="fab-camera" class="fab-camera" type="button" title="Escanear código" aria-label="Escanear código de barras"><i class="fa-solid fa-camera"></i></button>` : ''}
       ${fab ? `<button id="fab-new" class="fab" title="Nuevo" aria-label="Nuevo registro"><i class="fa-solid fa-plus"></i></button>` : ''}
 
       <button id="fab-menu" class="fab-menu" type="button" aria-label="Abrir menú">
@@ -158,6 +159,9 @@ export function shell(contentHtml, { title = '', fab = null, fabSearch = false, 
         <nav class="flex flex-col gap-1 flex-1">
           <a href="#/catalogo" class="menu-item ${active === 'catalogo' ? 'active' : ''}">
             <i class="fa-solid fa-box-open"></i> Catálogo
+          </a>
+          <a href="#/publicaciones" class="menu-item ${active === 'publicaciones' ? 'active' : ''}">
+            <i class="fa-solid fa-share-nodes"></i> Publicaciones
           </a>
           <a href="#/calcular-precio" class="menu-item ${active === 'calcular-precio' ? 'active' : ''}">
             <i class="fa-solid fa-calculator"></i> Calcular Precio
@@ -183,7 +187,7 @@ export function shell(contentHtml, { title = '', fab = null, fabSearch = false, 
   `;
 }
 
-export function bindShell(onFab, onFabSearch, onFactorUpdated) {
+export function bindShell(onFab, onFabSearch, onFactorUpdated, onFabCamera) {
   const overlay = document.getElementById('drawer-overlay');
   const drawer = document.getElementById('drawer');
   const open = () => {
@@ -217,6 +221,10 @@ export function bindShell(onFab, onFabSearch, onFactorUpdated) {
   if (onFabSearch) {
     document.getElementById('fab-search')?.addEventListener('click', onFabSearch);
   }
+
+  if (onFabCamera) {
+    document.getElementById('fab-camera')?.addEventListener('click', onFabCamera);
+  }
 }
 
 async function confirmLogout() {
@@ -246,14 +254,14 @@ export async function openTipoCambioSync(onUpdated) {
     <div class="flex items-start justify-between gap-3 mb-4">
       <div class="min-w-0">
         <h2 class="font-display text-xl font-bold text-brand-900">Tipo de cambio</h2>
-        <p class="text-sm text-slate-500">Consultando con Gemini (GTQ → MXN)...</p>
+        <p class="text-sm text-slate-500">Consultando Google Finance (GTQ / MXN)...</p>
       </div>
       <button id="modal-close" class="btn btn-ghost btn-icon shrink-0"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div id="tipo-cambio-body" class="py-8 text-center text-slate-500">
       <div class="inline-flex items-center gap-2">
         <span class="spinner" style="border-color:rgba(15,118,110,.25);border-top-color:#0f766e"></span>
-        Obteniendo factor de cambio...
+        Obteniendo factor desde Google Finance...
       </div>
     </div>
   `);

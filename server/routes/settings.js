@@ -6,7 +6,7 @@ const {
   SETTING_MODELO,
   isAllowedGeminiModel,
 } = require('../gemini-models');
-const { consultarTipoCambioMxnPorGtq } = require('../gemini');
+const { consultarTipoCambioMxnPorGtq } = require('../google-finance');
 
 const router = express.Router();
 router.use(authRequired);

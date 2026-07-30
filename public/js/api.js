@@ -135,6 +135,13 @@ export const api = {
     remove: (id) => request(`/proveedores/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   },
 
+  publicaciones: {
+    list: () => request('/publicaciones'),
+    create: (body) => request('/publicaciones', { method: 'POST', body }),
+    remove: (id) => request(`/publicaciones/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    publicar: (id) => request(`/publicaciones/${encodeURIComponent(id)}/publicar`, { method: 'POST', body: {} }),
+  },
+
   usuarios: {
     list: () => request('/usuarios'),
     create: (body) => request('/usuarios', { method: 'POST', body }),

@@ -92,7 +92,7 @@ export async function renderConfiguraciones(el) {
           <form class="setting-form space-y-3" autocomplete="off">
             <label class="label">${esc(s.OPCION)}</label>
             ${isGeminiModel ? `<p class="text-xs text-slate-500 -mt-1">Modelo usado en cotizaciones con Gemini</p>` : ''}
-            ${isFactor ? `<p class="text-xs text-slate-500 -mt-1">Pesos mexicanos por 1 quetzal (costo ÷ factor)</p>` : ''}
+            ${isFactor ? `<p class="text-xs text-slate-500 -mt-1">Pesos mexicanos por 1 quetzal · fuente: Google Finance (GTQ/MXN)</p>` : ''}
             <div class="flex flex-col sm:flex-row gap-2">
               ${controlHtml}
               <button type="submit" class="btn btn-primary sm:px-5">

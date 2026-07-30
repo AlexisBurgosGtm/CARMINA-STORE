@@ -127,71 +127,10 @@ function normalizeCotizacion(data) {
 
 /**
  * Consulta tipo de cambio: cuántos pesos mexicanos (MXN) equivalen a 1 quetzal (GTQ).
- * Ese valor se usa como FACTOR CAMBIO MONEDA (costoQtz = costoPesos / factor).
+ * Fuente: Google Finance (GTQ/MXN).
  */
 async function consultarTipoCambioMxnPorGtq() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY no configurada');
-  }
-
-  const modelName = await getConfiguredGeminiModel();
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: modelName });
-
-  const prompt = `Eres un asistente de tipos de cambio.
-Necesito el tipo de cambio actual aproximado de Quetzales guatemaltecos (GTQ) a Pesos mexicanos (MXN):
-es decir, cuántos pesos mexicanos equivalen a 1 quetzal guatemalteco.
-
-Responde ÚNICAMENTE con un JSON válido (sin markdown, sin backticks) con este formato exacto:
-{
-  "factor": 2.35,
-  "moneda_origen": "GTQ",
-  "moneda_destino": "MXN",
-  "descripcion": "1 GTQ ≈ X MXN",
-  "fecha": "YYYY-MM-DD",
-  "fuente": "breve nota"
-}
-
-El campo "factor" debe ser un número decimal positivo (pesos mexicanos por 1 quetzal).`;
-
-  let result;
-  try {
-    result = await model.generateContent(prompt);
-  } catch (err) {
-    console.error('Gemini tipo cambio error:', modelName, err?.message || err);
-    throw new Error(friendlyGeminiError(err, modelName));
-  }
-
-  const text = result.response.text().trim();
-  let cleaned = text
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/\s*```$/i, '')
-    .trim();
-
-  let data;
-  try {
-    data = JSON.parse(cleaned);
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) data = JSON.parse(match[0]);
-    else throw new Error('No se pudo parsear la respuesta de Gemini');
-  }
-
-  const factor = Number(data?.factor);
-  if (!Number.isFinite(factor) || factor <= 0) {
-    throw new Error('Gemini no devolvió un factor de cambio válido');
-  }
-
-  return {
-    factor: Math.round(factor * 10000) / 10000,
-    moneda_origen: data.moneda_origen || 'GTQ',
-    moneda_destino: data.moneda_destino || 'MXN',
-    descripcion: data.descripcion || `1 GTQ ≈ ${factor} MXN`,
-    fecha: data.fecha || null,
-    fuente: data.fuente || null,
-  };
+  return require('./google-finance').consultarTipoCambioMxnPorGtq();
 }
 
 module.exports = { cotizarProducto, getConfiguredGeminiModel, consultarTipoCambioMxnPorGtq };

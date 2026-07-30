@@ -290,6 +290,36 @@ img, video, canvas, svg {
   transform: translateX(-50%) scale(0.96);
 }
 
+.fab-camera {
+  position: fixed;
+  left: 50%;
+  bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 9999px;
+  background: linear-gradient(145deg, #f59e0b, #d97706);
+  color: white;
+  font-size: 1.45rem;
+  border: none;
+  box-shadow: 0 12px 28px rgba(217, 119, 6, 0.4);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.fab-camera:hover {
+  transform: translateX(-50%) scale(1.06);
+  box-shadow: 0 16px 36px rgba(217, 119, 6, 0.5);
+}
+
+.fab-camera:active {
+  transform: translateX(-50%) scale(0.96);
+}
+
 .fab-menu {
   position: fixed;
   left: max(1.25rem, env(safe-area-inset-left, 0px));
