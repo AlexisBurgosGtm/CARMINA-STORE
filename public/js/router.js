@@ -112,9 +112,14 @@ export function shell(contentHtml, { title = '', fab = null, fabSearch = false, 
     <div class="page-shell">
       <header class="sticky top-0 z-30 px-4 pt-4 pb-2 page-header-inner">
         <div class="glass-strong rounded-2xl px-4 py-3 flex items-center justify-between gap-3 max-w-full overflow-hidden">
-          <div class="min-w-0 flex-1 overflow-hidden">
-            <p class="font-display text-xl font-bold text-brand-800 tracking-tight truncate">Carmina Store</p>
-            <p class="text-xs text-slate-500 truncate">${title}</p>
+          <div class="header-brand min-w-0 flex-1 overflow-hidden">
+            <button id="btn-sync-factor" type="button" class="btn-sync-header" title="Actualizar tipo de cambio" aria-label="Actualizar tipo de cambio">
+              <i class="fa-solid fa-arrows-rotate"></i>
+            </button>
+            <div class="min-w-0 overflow-hidden">
+              <p class="font-display text-xl font-bold text-brand-800 tracking-tight truncate">Carmina Store</p>
+              <p class="text-xs text-slate-500 truncate">${title}</p>
+            </div>
           </div>
           <div class="header-user shrink-0">
             <div class="header-user-info text-right min-w-0">
@@ -154,6 +159,9 @@ export function shell(contentHtml, { title = '', fab = null, fabSearch = false, 
           <a href="#/catalogo" class="menu-item ${active === 'catalogo' ? 'active' : ''}">
             <i class="fa-solid fa-box-open"></i> Catálogo
           </a>
+          <a href="#/calcular-precio" class="menu-item ${active === 'calcular-precio' ? 'active' : ''}">
+            <i class="fa-solid fa-calculator"></i> Calcular Precio
+          </a>
           <a href="#/proveedores" class="menu-item ${active === 'proveedores' ? 'active' : ''}">
             <i class="fa-solid fa-truck-field"></i> Proveedores
           </a>
@@ -175,7 +183,7 @@ export function shell(contentHtml, { title = '', fab = null, fabSearch = false, 
   `;
 }
 
-export function bindShell(onFab, onFabSearch) {
+export function bindShell(onFab, onFabSearch, onFactorUpdated) {
   const overlay = document.getElementById('drawer-overlay');
   const drawer = document.getElementById('drawer');
   const open = () => {
@@ -197,6 +205,9 @@ export function bindShell(onFab, onFabSearch) {
   });
   document.getElementById('btn-logout-header')?.addEventListener('click', () => {
     confirmLogout();
+  });
+  document.getElementById('btn-sync-factor')?.addEventListener('click', () => {
+    openTipoCambioSync(onFactorUpdated);
   });
 
   if (onFab) {
@@ -227,6 +238,81 @@ async function confirmLogout() {
   }
   clearSession();
   navigate('/login');
+}
+
+/** Consulta Gemini el tipo de cambio GTQ→MXN y ofrece actualizar FACTOR CAMBIO MONEDA */
+export async function openTipoCambioSync(onUpdated) {
+  openModal(`
+    <div class="flex items-start justify-between gap-3 mb-4">
+      <div class="min-w-0">
+        <h2 class="font-display text-xl font-bold text-brand-900">Tipo de cambio</h2>
+        <p class="text-sm text-slate-500">Consultando con Gemini (GTQ → MXN)...</p>
+      </div>
+      <button id="modal-close" class="btn btn-ghost btn-icon shrink-0"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div id="tipo-cambio-body" class="py-8 text-center text-slate-500">
+      <div class="inline-flex items-center gap-2">
+        <span class="spinner" style="border-color:rgba(15,118,110,.25);border-top-color:#0f766e"></span>
+        Obteniendo factor de cambio...
+      </div>
+    </div>
+  `);
+
+  const body = document.getElementById('tipo-cambio-body');
+  try {
+    const data = await api.settings.tipoCambioGemini();
+    const factor = Number(data.factor);
+    const actual = data.factor_actual;
+
+    if (!body) return;
+    body.innerHTML = `
+      <div class="text-left space-y-3">
+        <div class="rounded-2xl bg-white/55 p-4 text-center">
+          <p class="text-xs uppercase tracking-wide text-slate-400">Factor sugerido</p>
+          <p class="font-display text-4xl font-bold text-brand-700 mt-1">${factor}</p>
+          <p class="text-sm text-slate-600 mt-2">${escHtml(data.descripcion || `1 GTQ ≈ ${factor} MXN`)}</p>
+        </div>
+        <p class="text-sm text-slate-600">
+          Factor actual guardado:
+          <strong>${actual != null && Number.isFinite(actual) ? actual : '—'}</strong>
+        </p>
+        ${data.fuente ? `<p class="text-xs text-slate-500">${escHtml(data.fuente)}</p>` : ''}
+        <p class="text-sm text-slate-700">¿Deseas actualizar el factor de cambio en configuraciones?</p>
+        <div class="flex gap-2 pt-1">
+          <button type="button" id="btn-tc-cancel" class="btn btn-ghost flex-1">No</button>
+          <button type="button" id="btn-tc-update" class="btn btn-primary flex-1">
+            <i class="fa-solid fa-floppy-disk"></i> Sí, actualizar
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('btn-tc-cancel')?.addEventListener('click', closeModal);
+    document.getElementById('btn-tc-update')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btn-tc-update');
+      if (btn) btn.disabled = true;
+      try {
+        const saved = await api.settings.updateFactorCambio(factor);
+        toast(`Factor actualizado a ${saved.VALOR}`, 'success');
+        closeModal();
+        if (typeof onUpdated === 'function') onUpdated(Number(saved.VALOR));
+      } catch (err) {
+        toast(err.message, 'error');
+        if (btn) btn.disabled = false;
+      }
+    });
+  } catch (err) {
+    if (body) body.innerHTML = `<p class="text-red-600">${escHtml(err.message)}</p>`;
+    toast(err.message, 'error');
+  }
+}
+
+function escHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 export function openModal(html) {

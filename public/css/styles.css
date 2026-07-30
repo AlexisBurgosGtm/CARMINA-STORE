@@ -73,6 +73,51 @@ img, video, canvas, svg {
   max-width: 55%;
 }
 
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.btn-sync-header {
+  flex-shrink: 0;
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(14, 165, 233, 0.28);
+  background: rgba(14, 165, 233, 0.12);
+  color: #0284c7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: transform 0.15s, background 0.2s, box-shadow 0.2s;
+}
+
+.btn-sync-header:hover {
+  transform: translateY(-1px) rotate(45deg);
+  background: rgba(14, 165, 233, 0.2);
+  box-shadow: 0 6px 16px rgba(2, 132, 199, 0.2);
+}
+
+.btn-sync-header:active {
+  transform: scale(0.96);
+}
+
+.calc-result-card {
+  border-radius: 1.15rem;
+  padding: 1rem 1.1rem;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+}
+
+.calc-result-highlight {
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.1), rgba(20, 184, 166, 0.12));
+  border-color: rgba(15, 118, 110, 0.18);
+}
+
 .header-user-info {
   min-width: 0;
   display: none;

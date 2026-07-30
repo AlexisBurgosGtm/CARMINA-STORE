@@ -6,11 +6,13 @@ const {
   SETTING_MODELO,
   isAllowedGeminiModel,
 } = require('../gemini-models');
+const { consultarTipoCambioMxnPorGtq } = require('../gemini');
 
 const router = express.Router();
 router.use(authRequired);
 
 const SECRET_OPTION = 'CLAVE VERIFICACIONES';
+const FACTOR_OPTION = 'FACTOR CAMBIO MONEDA';
 
 router.get('/', adminRequired, async (_req, res) => {
   try {
@@ -44,6 +46,47 @@ router.post('/verificar-clave', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al verificar la clave' });
+  }
+});
+
+router.post('/tipo-cambio-gemini', async (_req, res) => {
+  try {
+    const data = await consultarTipoCambioMxnPorGtq();
+    const current = await query('SELECT VALOR FROM SETTINGS WHERE OPCION = ?', [FACTOR_OPTION]);
+    res.json({
+      ...data,
+      factor_actual: current[0] ? Number(current[0].VALOR) : null,
+      opcion: FACTOR_OPTION,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Error al consultar tipo de cambio' });
+  }
+});
+
+router.put('/factor-cambio', async (req, res) => {
+  try {
+    const valor = Number(req.body?.VALOR ?? req.body?.factor);
+    if (!Number.isFinite(valor) || valor <= 0) {
+      return res.status(400).json({ error: 'Factor de cambio inválido' });
+    }
+    const rounded = Math.round(valor * 10000) / 10000;
+    const rows = await query('SELECT OPCION FROM SETTINGS WHERE OPCION = ?', [FACTOR_OPTION]);
+    if (!rows.length) {
+      await query('INSERT INTO SETTINGS (OPCION, VALOR) VALUES (?, ?)', [
+        FACTOR_OPTION,
+        String(rounded),
+      ]);
+    } else {
+      await query('UPDATE SETTINGS SET VALOR = ? WHERE OPCION = ?', [
+        String(rounded),
+        FACTOR_OPTION,
+      ]);
+    }
+    res.json({ ok: true, OPCION: FACTOR_OPTION, VALOR: String(rounded) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al actualizar el factor de cambio' });
   }
 });
 

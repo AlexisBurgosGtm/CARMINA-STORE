@@ -5,9 +5,11 @@ import { renderCatalogo } from './views/catalogo.js';
 import { renderProveedores } from './views/proveedores.js';
 import { renderUsuarios } from './views/usuarios.js';
 import { renderConfiguraciones } from './views/configuraciones.js';
+import { renderCalcularPrecio } from './views/calcular-precio.js';
 
 register('/login', renderLogin);
 register('/catalogo', renderCatalogo);
+register('/calcular-precio', renderCalcularPrecio);
 register('/proveedores', renderProveedores);
 register('/usuarios', renderUsuarios);
 register('/configuraciones', renderConfiguraciones);

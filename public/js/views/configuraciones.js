@@ -1,5 +1,5 @@
 import { api, toast } from '../api.js';
-import { shell, bindShell } from '../router.js';
+import { shell, bindShell, openTipoCambioSync } from '../router.js';
 
 function esc(s) {
   return String(s ?? '')
@@ -51,6 +51,7 @@ export async function renderConfiguraciones(el) {
       ? settings.map((s) => {
         const isSecret = s.OPCION === 'CLAVE VERIFICACIONES' || s.secreta;
         const isGeminiModel = s.OPCION === 'MODELO GEMINI';
+        const isFactor = s.OPCION === 'FACTOR CAMBIO MONEDA';
 
         let controlHtml = '';
         if (isGeminiModel) {
@@ -68,6 +69,15 @@ export async function renderConfiguraciones(el) {
               autocomplete="off" data-lpignore="true" data-1p-ignore="true"
               placeholder="Nueva clave (no se muestra la actual)"
               required />`;
+        } else if (isFactor) {
+          controlHtml = `
+            <div class="code-with-scan flex-1">
+              <input name="VALOR" class="input-field" type="text" autocomplete="off"
+                value="${esc(s.VALOR)}" required />
+              <button type="button" class="btn-scan btn-sync-factor-setting" title="Consultar tipo de cambio con IA" aria-label="Consultar tipo de cambio">
+                <i class="fa-solid fa-arrows-rotate"></i>
+              </button>
+            </div>`;
         } else {
           controlHtml = `
             <input name="VALOR" class="input-field flex-1"
@@ -82,6 +92,7 @@ export async function renderConfiguraciones(el) {
           <form class="setting-form space-y-3" autocomplete="off">
             <label class="label">${esc(s.OPCION)}</label>
             ${isGeminiModel ? `<p class="text-xs text-slate-500 -mt-1">Modelo usado en cotizaciones con Gemini</p>` : ''}
+            ${isFactor ? `<p class="text-xs text-slate-500 -mt-1">Pesos mexicanos por 1 quetzal (costo ÷ factor)</p>` : ''}
             <div class="flex flex-col sm:flex-row gap-2">
               ${controlHtml}
               <button type="submit" class="btn btn-primary sm:px-5">
@@ -102,6 +113,15 @@ export async function renderConfiguraciones(el) {
     `, { title: 'Configuraciones', fab: false, active: 'configuraciones' });
 
     bindShell(null);
+
+    el.querySelectorAll('.btn-sync-factor-setting').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        openTipoCambioSync((nuevo) => {
+          const input = el.querySelector('[data-opcion="FACTOR CAMBIO MONEDA"] input[name="VALOR"]');
+          if (input && nuevo != null) input.value = String(nuevo);
+        });
+      });
+    });
 
     el.querySelectorAll('.setting-form').forEach((form) => {
       form.addEventListener('submit', async (e) => {

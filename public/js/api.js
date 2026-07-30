@@ -150,6 +150,10 @@ export const api = {
     verificarClave: (clave) =>
       request('/settings/verificar-clave', { method: 'POST', body: { clave } }),
     geminiModels: () => request('/settings/gemini-models'),
+    tipoCambioGemini: () =>
+      request('/settings/tipo-cambio-gemini', { method: 'POST', body: {}, timeoutMs: 60000 }),
+    updateFactorCambio: (factor) =>
+      request('/settings/factor-cambio', { method: 'PUT', body: { VALOR: factor } }),
   },
 };
 
