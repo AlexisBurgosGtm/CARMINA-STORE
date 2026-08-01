@@ -66,8 +66,9 @@ export async function startRouter(mountEl) {
     try {
       const previous = mountEl.firstElementChild;
       if (previous) {
-        previous.classList.remove('page-slide-in');
-        previous.classList.add('page-slide-out');
+        const animTarget = previous.querySelector('.page-shell') || previous;
+        animTarget.classList.remove('page-slide-in');
+        animTarget.classList.add('page-slide-out');
         await new Promise((r) => setTimeout(r, 200));
       }
 
@@ -75,7 +76,13 @@ export async function startRouter(mountEl) {
 
       const next = mountEl.firstElementChild;
       if (next) {
-        next.classList.add('page-slide-in');
+        const animTarget = next.querySelector('.page-shell') || next;
+        animTarget.classList.add('page-slide-in');
+        const clearAnim = () => {
+          animTarget.classList.remove('page-slide-in');
+          animTarget.removeEventListener('animationend', clearAnim);
+        };
+        animTarget.addEventListener('animationend', clearAnim);
       }
     } catch (err) {
       console.error(err);
@@ -109,84 +116,87 @@ export function shell(contentHtml, { title = '', fab = null, fabSearch = false, 
   const admin = isAdmin();
 
   return `
-    <div class="page-shell">
-      <header class="sticky top-0 z-30 px-4 pt-4 pb-2 page-header-inner">
-        <div class="glass-strong rounded-2xl px-4 py-3 flex items-center justify-between gap-3 max-w-full overflow-hidden">
-          <div class="header-brand min-w-0 flex-1 overflow-hidden">
-            <button id="btn-sync-factor" type="button" class="btn-sync-header" title="Actualizar tipo de cambio" aria-label="Actualizar tipo de cambio">
-              <i class="fa-solid fa-arrows-rotate"></i>
-            </button>
-            <div class="min-w-0 overflow-hidden">
-              <p class="font-display text-xl font-bold text-brand-800 tracking-tight truncate">Carmina Store</p>
-              <p class="text-xs text-slate-500 truncate">${title}</p>
+    <div class="app-view">
+      <div class="page-shell">
+        <header class="sticky top-0 z-30 px-4 pt-4 pb-2 page-header-inner">
+          <div class="glass-strong rounded-2xl px-4 py-3 flex items-center justify-between gap-3 max-w-full overflow-hidden">
+            <div class="header-brand min-w-0 flex-1 overflow-hidden">
+              <button id="btn-sync-factor" type="button" class="btn-sync-header" title="Actualizar tipo de cambio" aria-label="Actualizar tipo de cambio">
+                <i class="fa-solid fa-arrows-rotate"></i>
+              </button>
+              <div class="min-w-0 overflow-hidden">
+                <p class="font-display text-xl font-bold text-brand-800 tracking-tight truncate">Carmina Store</p>
+                <p class="text-xs text-slate-500 truncate">${title}</p>
+              </div>
+            </div>
+            <div class="header-user shrink-0">
+              <div class="header-user-info text-right min-w-0">
+                <p class="text-sm font-semibold text-slate-700 truncate">${user?.USER || ''}</p>
+                <p class="text-[10px] uppercase tracking-wide text-brand-700 truncate">${user?.TIPO || ''}</p>
+              </div>
+              <button id="btn-logout-header" type="button" class="btn-logout-header" title="Cerrar sesión" aria-label="Cerrar sesión">
+                <i class="fa-solid fa-power-off"></i>
+              </button>
             </div>
           </div>
-          <div class="header-user shrink-0">
-            <div class="header-user-info text-right min-w-0">
-              <p class="text-sm font-semibold text-slate-700 truncate">${user?.USER || ''}</p>
-              <p class="text-[10px] uppercase tracking-wide text-brand-700 truncate">${user?.TIPO || ''}</p>
+        </header>
+
+        <main class="page-main pt-3">
+          ${contentHtml}
+        </main>
+
+        <div id="drawer-overlay" class="drawer-overlay"></div>
+        <aside id="drawer" class="drawer glass-strong rounded-l-3xl p-5 flex flex-col">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <p class="font-display text-lg font-bold text-brand-800">Menú</p>
+              <p class="text-xs text-slate-500">${user?.USER || ''}</p>
             </div>
-            <button id="btn-logout-header" type="button" class="btn-logout-header" title="Cerrar sesión" aria-label="Cerrar sesión">
-              <i class="fa-solid fa-power-off"></i>
+            <button id="btn-close-menu" class="btn btn-ghost btn-icon" aria-label="Cerrar">
+              <i class="fa-solid fa-xmark"></i>
             </button>
           </div>
-        </div>
-      </header>
-
-      <main class="page-main pt-3">
-        ${contentHtml}
-      </main>
-
-      ${fabSearch ? `<button id="fab-search" class="fab-search" type="button" title="Cotizar con IA" aria-label="Cotizar con IA"><i class="fa-solid fa-magnifying-glass"></i></button>` : ''}
-      ${fabCamera ? `<button id="fab-camera" class="fab-camera" type="button" title="Escanear código" aria-label="Escanear código de barras"><i class="fa-solid fa-camera"></i></button>` : ''}
-      ${fab ? `<button id="fab-new" class="fab" title="Nuevo" aria-label="Nuevo registro"><i class="fa-solid fa-plus"></i></button>` : ''}
-
-      <button id="fab-menu" class="fab-menu" type="button" aria-label="Abrir menú">
-        <i class="fa-solid fa-bars"></i> Menu
-      </button>
-
-      <div id="drawer-overlay" class="drawer-overlay"></div>
-      <aside id="drawer" class="drawer glass-strong rounded-l-3xl p-5 flex flex-col">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <p class="font-display text-lg font-bold text-brand-800">Menú</p>
-            <p class="text-xs text-slate-500">${user?.USER || ''}</p>
-          </div>
-          <button id="btn-close-menu" class="btn btn-ghost btn-icon" aria-label="Cerrar">
-            <i class="fa-solid fa-xmark"></i>
+          <nav class="flex flex-col gap-1 flex-1">
+            <a href="#/catalogo" class="menu-item ${active === 'catalogo' ? 'active' : ''}">
+              <i class="fa-solid fa-box-open"></i> Catálogo
+            </a>
+            <a href="#/publicaciones" class="menu-item ${active === 'publicaciones' ? 'active' : ''}">
+              <i class="fa-solid fa-share-nodes"></i> Publicaciones
+            </a>
+            <a href="#/calcular-precio" class="menu-item ${active === 'calcular-precio' ? 'active' : ''}">
+              <i class="fa-solid fa-calculator"></i> Calcular Precio
+            </a>
+            <a href="#/proveedores" class="menu-item ${active === 'proveedores' ? 'active' : ''}">
+              <i class="fa-solid fa-truck-field"></i> Proveedores
+            </a>
+            ${admin ? `
+            <a href="#/usuarios" class="menu-item ${active === 'usuarios' ? 'active' : ''}">
+              <i class="fa-solid fa-users-gear"></i> Usuarios
+            </a>` : ''}
+            <a href="#/whatsapp" class="menu-item ${active === 'whatsapp' ? 'active' : ''}">
+              <i class="fa-brands fa-whatsapp"></i> WhatsApp
+            </a>
+            ${admin ? `
+            <a href="#/configuraciones" class="menu-item ${active === 'configuraciones' ? 'active' : ''}">
+              <i class="fa-solid fa-sliders"></i> Configuraciones
+            </a>` : ''}
+          </nav>
+          <button id="btn-logout" class="btn btn-danger w-full mt-4">
+            <i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión
           </button>
-        </div>
-        <nav class="flex flex-col gap-1 flex-1">
-          <a href="#/catalogo" class="menu-item ${active === 'catalogo' ? 'active' : ''}">
-            <i class="fa-solid fa-box-open"></i> Catálogo
-          </a>
-          <a href="#/publicaciones" class="menu-item ${active === 'publicaciones' ? 'active' : ''}">
-            <i class="fa-solid fa-share-nodes"></i> Publicaciones
-          </a>
-          <a href="#/calcular-precio" class="menu-item ${active === 'calcular-precio' ? 'active' : ''}">
-            <i class="fa-solid fa-calculator"></i> Calcular Precio
-          </a>
-          <a href="#/proveedores" class="menu-item ${active === 'proveedores' ? 'active' : ''}">
-            <i class="fa-solid fa-truck-field"></i> Proveedores
-          </a>
-          ${admin ? `
-          <a href="#/usuarios" class="menu-item ${active === 'usuarios' ? 'active' : ''}">
-            <i class="fa-solid fa-users-gear"></i> Usuarios
-          </a>` : ''}
-          <a href="#/whatsapp" class="menu-item ${active === 'whatsapp' ? 'active' : ''}">
-            <i class="fa-brands fa-whatsapp"></i> WhatsApp
-          </a>
-          ${admin ? `
-          <a href="#/configuraciones" class="menu-item ${active === 'configuraciones' ? 'active' : ''}">
-            <i class="fa-solid fa-sliders"></i> Configuraciones
-          </a>` : ''}
-        </nav>
-        <button id="btn-logout" class="btn btn-danger w-full mt-4">
-          <i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión
-        </button>
-      </aside>
+        </aside>
 
-      <div id="modal-root"></div>
+        <div id="modal-root"></div>
+      </div>
+
+      <div class="fab-dock" aria-hidden="false">
+        ${fabSearch ? `<button id="fab-search" class="fab-search" type="button" title="Cotizar con IA" aria-label="Cotizar con IA"><i class="fa-solid fa-magnifying-glass"></i></button>` : ''}
+        ${fabCamera ? `<button id="fab-camera" class="fab-camera" type="button" title="Escanear código" aria-label="Escanear código de barras"><i class="fa-solid fa-camera"></i></button>` : ''}
+        ${fab ? `<button id="fab-new" class="fab" title="Nuevo" aria-label="Nuevo registro"><i class="fa-solid fa-plus"></i></button>` : ''}
+        <button id="fab-menu" class="fab-menu" type="button" aria-label="Abrir menú">
+          <i class="fa-solid fa-bars"></i> Menu
+        </button>
+      </div>
     </div>
   `;
 }
