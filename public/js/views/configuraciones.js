@@ -70,7 +70,14 @@ export async function renderConfiguraciones(el) {
         api.settings.geminiModels(),
         api.settings.badgePrecioOptions().catch(() => ({ colores: [], formas: [] })),
       ]);
-      settings = settingsRes;
+      settings = [...settingsRes].sort((a, b) => {
+        const key = (op) => {
+          if (op === 'FORMA BADGE PRECIO') return 'COLOR BADGE PRECIO\u0000';
+          if (op === 'COLOR BADGE PRECIO') return 'COLOR BADGE PRECIO\u0001';
+          return op;
+        };
+        return key(a.OPCION).localeCompare(key(b.OPCION), 'es');
+      });
       geminiModels = modelsRes.models || [];
       badgeOpts = badgeRes || badgeOpts;
     } catch (err) {

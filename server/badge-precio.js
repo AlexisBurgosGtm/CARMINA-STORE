@@ -66,16 +66,15 @@ function starPoints(cx, cy, spikes, outerR, innerR) {
 }
 
 function heartPath(cx, cy, size) {
-  // Corazón centrado; size ≈ radio visual
-  const s = size / 16;
-  const x = cx;
-  const y = cy + size * 0.08;
+  // Corazón con centro óptico en (cx, cy) para alinear el texto del precio
+  const s = size * 0.52;
+  const p = (x, y) => `${(cx + x * s).toFixed(2)},${(cy + y * s).toFixed(2)}`;
   return [
-    `M ${x} ${y + 4 * s}`,
-    `C ${x} ${y + 1.5 * s}, ${x - 7 * s} ${y - 5 * s}, ${x - 10 * s} ${y - 1 * s}`,
-    `C ${x - 13 * s} ${y + 4 * s}, ${x - 7 * s} ${y + 9 * s}, ${x} ${y + 14 * s}`,
-    `C ${x + 7 * s} ${y + 9 * s}, ${x + 13 * s} ${y + 4 * s}, ${x + 10 * s} ${y - 1 * s}`,
-    `C ${x + 7 * s} ${y - 5 * s}, ${x} ${y + 1.5 * s}, ${x} ${y + 4 * s}`,
+    `M ${p(0, -0.28)}`,
+    `C ${p(-0.08, -0.82)} ${p(-0.95, -0.82)} ${p(-0.95, -0.18)}`,
+    `C ${p(-0.95, 0.22)} ${p(-0.5, 0.52)} ${p(0, 0.88)}`,
+    `C ${p(0.5, 0.52)} ${p(0.95, 0.22)} ${p(0.95, -0.18)}`,
+    `C ${p(0.95, -0.82)} ${p(0.08, -0.82)} ${p(0, -0.28)}`,
     'Z',
   ].join(' ');
 }
@@ -170,23 +169,25 @@ function buildBadgeShape({ forma, colorKey, width, height, priceText, fontSize }
     const d = starPoints(cx, cy, 8, outerR, outerR * 0.48);
     shapeSvg = `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="2" filter="url(#badgeShadow)" />`;
   } else if (shape === 'CORAZON') {
-    const size = Math.max(pillW, pillH) * 0.95;
-    cx = width - margin - size * 0.55;
-    cy = height - margin - size * 0.55;
+    const size = Math.max(pillW, pillH) * 1.05;
+    const half = size * 0.55;
+    cx = width - margin - half;
+    cy = height - margin - half;
     const d = heartPath(cx, cy, size);
     shapeSvg = `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="2" filter="url(#badgeShadow)" />`;
-    textYOffset = fontSize * 0.55;
+    // Baseline del texto en el centro óptico del corazón (no abajo)
+    textYOffset = fontSize * 0.32;
   } else if (shape === 'COPO DE NIEVE') {
     const r = Math.max(pillW, pillH) * 0.58;
     cx = width - margin - r;
     cy = height - margin - r;
-    // Disco de fondo + líneas del copo
-    const lineColor = normalizeColor(colorKey) === 'BLANCO' ? '#111827' : '#ffffff';
+    // Patrón del copo siempre en celeste claro (no blanco: se confunde con el precio)
+    const flakeColor = '#7dd3fc';
     shapeSvg = `
       <circle cx="${cx}" cy="${cy}" r="${r.toFixed(2)}"
         fill="${fill}" stroke="${stroke}" stroke-width="2" filter="url(#badgeShadow)" />
-      <g stroke="${lineColor}" stroke-width="${Math.max(2, fontSize * 0.08).toFixed(2)}"
-         stroke-linecap="round" opacity="0.55">
+      <g stroke="${flakeColor}" stroke-width="${Math.max(2.5, fontSize * 0.09).toFixed(2)}"
+         stroke-linecap="round" opacity="0.95">
         ${snowflakeLines(cx, cy, r * 0.78)}
       </g>`;
   } else {
