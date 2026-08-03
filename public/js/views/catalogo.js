@@ -717,6 +717,9 @@ function productListHtml(productos, factor) {
         <div class="product-row-actions">
           <button class="btn btn-ghost btn-icon btn-view" title="Ver"><i class="fa-solid fa-eye"></i></button>
           <button class="btn btn-ghost btn-icon btn-cotizar-row" title="Cotizar Gemini"><i class="fa-solid fa-robot"></i></button>
+          <button class="btn btn-ghost btn-icon btn-download-img" title="Descargar imagen con logo y precio" ${p.FOTO ? '' : 'disabled'}>
+            <i class="fa-solid fa-download"></i>
+          </button>
           <button class="btn btn-ghost btn-icon btn-edit" title="Editar"><i class="fa-solid fa-pen"></i></button>
           <button class="btn btn-danger btn-icon btn-del" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
         </div>
@@ -763,6 +766,19 @@ function bindProductRowActions(el, productos, paint, defaultCodprov) {
     });
 
     row.querySelector('.btn-cotizar-row')?.addEventListener('click', () => cotizar(product));
+
+    row.querySelector('.btn-download-img')?.addEventListener('click', async () => {
+      const btn = row.querySelector('.btn-download-img');
+      if (btn) btn.disabled = true;
+      try {
+        await api.productos.downloadImagenPublicacion(product.CODPROD, product.CODPROD);
+        toast('Imagen descargada', 'success');
+      } catch (err) {
+        toast(err.message || 'No se pudo descargar la imagen', 'error');
+      } finally {
+        if (btn && product.FOTO) btn.disabled = false;
+      }
+    });
 
     row.querySelector('.btn-edit')?.addEventListener('click', async () => {
       const proveedores = await loadProveedores();

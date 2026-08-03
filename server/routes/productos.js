@@ -5,6 +5,7 @@ const { query } = require('../db');
 const { authRequired } = require('../middleware/auth');
 const { uploadFoto, downloadFoto, deleteFoto, deleteFotosByCodigo } = require('../webdav');
 const { cotizarProducto } = require('../gemini');
+const { composePublicacionImage } = require('../compose-publicacion');
 
 const router = express.Router();
 
@@ -138,6 +139,45 @@ router.get('/:codprod/foto', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al obtener foto' });
+  }
+});
+
+/** Imagen compuesta para publicar/descargar (logo + precio). No altera la foto original. */
+router.get('/:codprod/imagen-publicacion', async (req, res) => {
+  try {
+    const codprod = req.params.codprod;
+    const rows = await query(
+      'SELECT CODPROD, DESPROD, PRECIO, FOTO FROM PRODUCTOS WHERE CODPROD = ?',
+      [codprod]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Producto no encontrado' });
+    const item = rows[0];
+    if (!item.FOTO) {
+      return res.status(400).json({
+        error: 'El producto no tiene foto. Agrega una foto antes de descargar.',
+      });
+    }
+    const photoBuffer = await downloadFoto(item.FOTO);
+    if (!photoBuffer) {
+      return res.status(404).json({ error: 'No se encontró la foto del producto en WebDAV' });
+    }
+
+    const composed = await composePublicacionImage({
+      photoBuffer,
+      precio: item.PRECIO,
+    });
+
+    const safeName = String(item.CODPROD || codprod).replace(/[^a-zA-Z0-9._-]/g, '_');
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'no-store');
+    res.set(
+      'Content-Disposition',
+      `attachment; filename="publicacion-${safeName}.png"`
+    );
+    res.send(composed);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Error al generar la imagen' });
   }
 });
 

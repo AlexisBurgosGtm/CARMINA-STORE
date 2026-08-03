@@ -127,6 +127,34 @@ export const api = {
       const token = encodeURIComponent(getToken() || '');
       return `/api/productos/${encodeURIComponent(id)}/foto?token=${token}&t=${Date.now()}`;
     },
+    downloadImagenPublicacion: async (id, filenameHint = '') => {
+      const token = encodeURIComponent(getToken() || '');
+      const res = await fetch(
+        `/api/productos/${encodeURIComponent(id)}/imagen-publicacion?token=${token}`,
+        { cache: 'no-store' }
+      );
+      if (!res.ok) {
+        let msg = 'No se pudo descargar la imagen';
+        try {
+          const data = await res.json();
+          if (data?.error) msg = data.error;
+        } catch (_) {
+          /* ignore */
+        }
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safe = String(filenameHint || id).replace(/[^a-zA-Z0-9._-]/g, '_');
+      a.href = url;
+      a.download = `publicacion-${safe}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      return true;
+    },
   },
 
   proveedores: {
@@ -198,6 +226,7 @@ export const api = {
     verificarClave: (clave) =>
       request('/settings/verificar-clave', { method: 'POST', body: { clave } }),
     geminiModels: () => request('/settings/gemini-models'),
+    badgePrecioOptions: () => request('/settings/badge-precio-options'),
     tipoCambioGemini: () =>
       request('/settings/tipo-cambio-gemini', { method: 'POST', body: {}, timeoutMs: 60000 }),
     updateFactorCambio: (factor) =>

@@ -8,6 +8,16 @@ const {
   isAllowedGeminiModel,
 } = require('../gemini-models');
 const { consultarTipoCambioMxnPorGtq } = require('../google-finance');
+const {
+  COLOR_OPTION,
+  FORMA_OPTION,
+  isValidColor,
+  isValidForma,
+  normalizeColor,
+  normalizeForma,
+  colorOptions,
+  formaOptions,
+} = require('../badge-precio');
 
 const router = express.Router();
 
@@ -89,6 +99,15 @@ router.get('/', adminRequired, async (_req, res) => {
 
 router.get('/gemini-models', adminRequired, (_req, res) => {
   res.json({ models: GEMINI_MODELS, setting: SETTING_MODELO });
+});
+
+router.get('/badge-precio-options', adminRequired, (_req, res) => {
+  res.json({
+    colores: colorOptions(),
+    formas: formaOptions(),
+    colorOption: COLOR_OPTION,
+    formaOption: FORMA_OPTION,
+  });
 });
 
 router.post('/verificar-clave', async (req, res) => {
@@ -242,13 +261,33 @@ router.put('/:opcion', adminRequired, async (req, res) => {
       return res.status(400).json({ error: 'VALOR es requerido' });
     }
 
-    const valor = String(VALOR).trim();
+    let valor = String(VALOR).trim();
 
     if (opcion === SETTING_MODELO && !isAllowedGeminiModel(valor)) {
       return res.status(400).json({
         error: 'Modelo Gemini no permitido',
         models: GEMINI_MODELS.map((m) => m.id),
       });
+    }
+
+    if (opcion === COLOR_OPTION) {
+      if (!isValidColor(valor)) {
+        return res.status(400).json({
+          error: 'Color de badge no permitido',
+          options: colorOptions().map((c) => c.id),
+        });
+      }
+      valor = normalizeColor(valor);
+    }
+
+    if (opcion === FORMA_OPTION) {
+      if (!isValidForma(valor)) {
+        return res.status(400).json({
+          error: 'Forma de badge no permitida',
+          options: formaOptions().map((f) => f.id),
+        });
+      }
+      valor = normalizeForma(valor);
     }
 
     const rows = await query('SELECT OPCION FROM SETTINGS WHERE OPCION = ?', [opcion]);

@@ -63,13 +63,16 @@ export async function renderConfiguraciones(el) {
 
     let settings = [];
     let geminiModels = [];
+    let badgeOpts = { colores: [], formas: [] };
     try {
-      const [settingsRes, modelsRes] = await Promise.all([
+      const [settingsRes, modelsRes, badgeRes] = await Promise.all([
         api.settings.list(),
         api.settings.geminiModels(),
+        api.settings.badgePrecioOptions().catch(() => ({ colores: [], formas: [] })),
       ]);
       settings = settingsRes;
       geminiModels = modelsRes.models || [];
+      badgeOpts = badgeRes || badgeOpts;
     } catch (err) {
       toast(err.message, 'error');
       el.innerHTML = shell(`
@@ -95,12 +98,36 @@ export async function renderConfiguraciones(el) {
         const isSecret = s.OPCION === 'CLAVE VERIFICACIONES' || s.secreta;
         const isGeminiModel = s.OPCION === 'MODELO GEMINI';
         const isFactor = s.OPCION === 'FACTOR CAMBIO MONEDA';
+        const isColorBadge = s.OPCION === 'COLOR BADGE PRECIO';
+        const isFormaBadge = s.OPCION === 'FORMA BADGE PRECIO';
 
         let controlHtml = '';
         if (isGeminiModel) {
           const options = geminiModels.map((m) => `
             <option value="${esc(m.id)}" ${s.VALOR === m.id ? 'selected' : ''}>
               ${esc(m.label || m.id)}
+            </option>`).join('');
+          controlHtml = `
+            <select name="VALOR" class="input-field flex-1" required autocomplete="off">
+              ${options}
+            </select>`;
+        } else if (isColorBadge) {
+          const options = (badgeOpts.colores || []).map((c) => `
+            <option value="${esc(c.id)}" ${String(s.VALOR).toUpperCase() === c.id ? 'selected' : ''}>
+              ${esc(c.label)}
+            </option>`).join('');
+          controlHtml = `
+            <div class="badge-color-control flex-1">
+              <select name="VALOR" class="input-field" required autocomplete="off" id="select-color-badge">
+                ${options}
+              </select>
+              <span class="badge-color-swatch" id="swatch-color-badge"
+                style="background:${esc((badgeOpts.colores || []).find((c) => c.id === String(s.VALOR).toUpperCase())?.bg || '#16a34a')}"></span>
+            </div>`;
+        } else if (isFormaBadge) {
+          const options = (badgeOpts.formas || []).map((f) => `
+            <option value="${esc(f.id)}" ${String(s.VALOR).toUpperCase() === f.id ? 'selected' : ''}>
+              ${esc(f.label)}
             </option>`).join('');
           controlHtml = `
             <select name="VALOR" class="input-field flex-1" required autocomplete="off">
@@ -136,6 +163,8 @@ export async function renderConfiguraciones(el) {
             <label class="label">${esc(s.OPCION)}</label>
             ${isGeminiModel ? `<p class="text-xs text-slate-500 -mt-1">Modelo usado en cotizaciones con Gemini</p>` : ''}
             ${isFactor ? `<p class="text-xs text-slate-500 -mt-1">Pesos mexicanos por 1 quetzal · fuente: Google Finance (GTQ/MXN)</p>` : ''}
+            ${isColorBadge ? `<p class="text-xs text-slate-500 -mt-1">Color de fondo del precio en imágenes para publicar (blanco = texto negro)</p>` : ''}
+            ${isFormaBadge ? `<p class="text-xs text-slate-500 -mt-1">Forma del badge del precio en imágenes para publicar</p>` : ''}
             <div class="flex flex-col sm:flex-row gap-2">
               ${controlHtml}
               <button type="submit" class="btn btn-primary sm:px-5">
@@ -164,6 +193,13 @@ export async function renderConfiguraciones(el) {
           if (input && nuevo != null) input.value = String(nuevo);
         });
       });
+    });
+
+    const colorSelect = document.getElementById('select-color-badge');
+    const colorSwatch = document.getElementById('swatch-color-badge');
+    const colorMap = Object.fromEntries((badgeOpts.colores || []).map((c) => [c.id, c.bg]));
+    colorSelect?.addEventListener('change', () => {
+      if (colorSwatch) colorSwatch.style.background = colorMap[colorSelect.value] || '#16a34a';
     });
 
     const logoFile = document.getElementById('logo-file');

@@ -2,6 +2,15 @@ const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
 const { query } = require('./db');
+const {
+  COLOR_OPTION,
+  FORMA_OPTION,
+  DEFAULT_COLOR,
+  DEFAULT_FORMA,
+  normalizeColor,
+  normalizeForma,
+  buildBadgeShape,
+} = require('./badge-precio');
 
 const LOGO_OPTION = 'LOGO EMPRESA';
 const FONT_CANDIDATES = [
@@ -67,19 +76,32 @@ async function loadEmpresaLogoBuffer() {
   }
 }
 
-function buildPriceOverlaySvg({ width, height, priceText }) {
+async function loadBadgeSettings() {
+  try {
+    const rows = await query(
+      'SELECT OPCION, VALOR FROM SETTINGS WHERE OPCION IN (?, ?)',
+      [COLOR_OPTION, FORMA_OPTION]
+    );
+    const map = Object.fromEntries(rows.map((r) => [r.OPCION, r.VALOR]));
+    return {
+      color: normalizeColor(map[COLOR_OPTION] || DEFAULT_COLOR),
+      forma: normalizeForma(map[FORMA_OPTION] || DEFAULT_FORMA),
+    };
+  } catch (_) {
+    return { color: DEFAULT_COLOR, forma: DEFAULT_FORMA };
+  }
+}
+
+function buildPriceOverlaySvg({ width, height, priceText, color, forma }) {
   const fontSize = Math.max(32, Math.round(width * 0.062));
-  const padX = Math.round(fontSize * 0.72);
-  const padY = Math.round(fontSize * 0.42);
-  const margin = Math.max(16, Math.round(width * 0.035));
-  const approxCharW = fontSize * 0.58;
-  const textW = Math.ceil(String(priceText).length * approxCharW);
-  const pillW = textW + padX * 2;
-  const pillH = Math.round(fontSize + padY * 2);
-  const pillX = width - margin - pillW;
-  const pillY = height - margin - pillH;
-  const textX = pillX + pillW / 2;
-  const textY = pillY + pillH / 2 + fontSize * 0.35;
+  const { shapeSvg, textX, textY, textFill } = buildBadgeShape({
+    forma,
+    colorKey: color,
+    width,
+    height,
+    priceText,
+    fontSize,
+  });
   const fontFace = getFontFaceCss();
   const fontFamily = fontFace
     ? `'PubPrice', 'Nunito', Arial, sans-serif`
@@ -90,22 +112,19 @@ function buildPriceOverlaySvg({ width, height, priceText }) {
       <defs>
         <style>
           ${fontFace}
-          .price-pill { fill: rgba(15, 118, 110, 0.92); }
           .price-text {
             font-family: ${fontFamily};
             font-weight: 800;
             font-size: ${fontSize}px;
-            fill: #ffffff;
+            fill: ${textFill};
             letter-spacing: 0.5px;
           }
         </style>
-        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <filter id="badgeShadow" x="-30%" y="-30%" width="160%" height="160%">
           <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.35"/>
         </filter>
       </defs>
-      <rect class="price-pill" x="${pillX}" y="${pillY}"
-        width="${pillW}" height="${pillH}" rx="${Math.round(pillH / 2)}" ry="${Math.round(pillH / 2)}"
-        filter="url(#shadow)" />
+      ${shapeSvg}
       <text class="price-text" x="${textX}" y="${textY}" text-anchor="middle">${escapeXml(priceText)}</text>
     </svg>
   `);
@@ -124,6 +143,8 @@ async function composePublicacionImage({ photoBuffer, precio, logoBuffer = null 
   if (logo === undefined || logo === null) {
     logo = await loadEmpresaLogoBuffer();
   }
+
+  const badge = await loadBadgeSettings();
 
   const maxSide = 1600;
   let pipeline = sharp(photoBuffer).rotate();
@@ -163,7 +184,13 @@ async function composePublicacionImage({ photoBuffer, precio, logoBuffer = null 
   }
 
   const priceText = formatQ(precio);
-  const priceSvg = buildPriceOverlaySvg({ width, height, priceText });
+  const priceSvg = buildPriceOverlaySvg({
+    width,
+    height,
+    priceText,
+    color: badge.color,
+    forma: badge.forma,
+  });
   composites.push({ input: priceSvg, left: 0, top: 0 });
 
   return sharp(basePng).composite(composites).png().toBuffer();
@@ -172,5 +199,6 @@ async function composePublicacionImage({ photoBuffer, precio, logoBuffer = null 
 module.exports = {
   composePublicacionImage,
   loadEmpresaLogoBuffer,
+  loadBadgeSettings,
   formatQ,
 };

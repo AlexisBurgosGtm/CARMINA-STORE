@@ -141,6 +141,28 @@ async function initDatabase() {
     console.log('Setting LOGO EMPRESA creado.');
   }
 
+  const colorBadge = await query('SELECT OPCION FROM SETTINGS WHERE OPCION = ?', [
+    'COLOR BADGE PRECIO',
+  ]);
+  if (!colorBadge.length) {
+    await query('INSERT INTO SETTINGS (OPCION, VALOR) VALUES (?, ?)', [
+      'COLOR BADGE PRECIO',
+      'VERDE',
+    ]);
+    console.log('Setting COLOR BADGE PRECIO creado.');
+  }
+
+  const formaBadge = await query('SELECT OPCION FROM SETTINGS WHERE OPCION = ?', [
+    'FORMA BADGE PRECIO',
+  ]);
+  if (!formaBadge.length) {
+    await query('INSERT INTO SETTINGS (OPCION, VALOR) VALUES (?, ?)', [
+      'FORMA BADGE PRECIO',
+      'OVALO',
+    ]);
+    console.log('Setting FORMA BADGE PRECIO creado.');
+  }
+
   // Super usuario
   const existing = await query('SELECT `USER` FROM USUARIOS WHERE `USER` = ?', [SUPER_USER.USER]);
   if (!existing.length) {
