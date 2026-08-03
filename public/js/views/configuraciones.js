@@ -9,6 +9,45 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
+function logoCardHtml(s) {
+  const preview = s.hasLogo
+    ? `<img id="logo-preview" class="logo-preview" src="/api/settings/logo?t=${Date.now()}" alt="Logo de empresa" />`
+    : `<div id="logo-preview-empty" class="logo-preview-empty">
+         <i class="fa-regular fa-image"></i>
+         <span>Sin logo</span>
+       </div>
+       <img id="logo-preview" class="logo-preview hidden" alt="Logo de empresa" />`;
+
+  return `
+    <article class="data-row p-4 sm:p-5" data-opcion="${esc(s.OPCION)}" data-logo="1">
+      <form id="logo-form" class="space-y-3" autocomplete="off">
+        <label class="label">${esc(s.OPCION)}</label>
+        <p class="text-xs text-slate-500 -mt-1">
+          PNG o WebP recomendados (soportan transparencias). Máx. 2 MB.
+        </p>
+        <div class="logo-setting-row">
+          <div class="logo-preview-wrap">
+            ${preview}
+          </div>
+          <div class="logo-setting-controls space-y-2 flex-1 min-w-0">
+            <input id="logo-file" name="logo" type="file" accept="image/png,image/webp,image/gif,image/jpeg"
+              class="input-field" />
+            <p id="logo-file-hint" class="text-xs text-slate-500"></p>
+            <div class="flex flex-wrap gap-2">
+              <button type="submit" class="btn btn-primary">
+                <i class="fa-solid fa-floppy-disk"></i> Guardar logo
+              </button>
+              ${s.hasLogo ? `
+              <button type="button" id="btn-logo-remove" class="btn btn-danger">
+                <i class="fa-solid fa-trash"></i> Quitar
+              </button>` : ''}
+            </div>
+          </div>
+        </div>
+      </form>
+    </article>`;
+}
+
 export async function renderConfiguraciones(el) {
   async function paint() {
     el.innerHTML = shell(`
@@ -49,6 +88,10 @@ export async function renderConfiguraciones(el) {
 
     const cards = settings.length
       ? settings.map((s) => {
+        if (s.OPCION === 'LOGO EMPRESA' || s.isLogo) {
+          return logoCardHtml(s);
+        }
+
         const isSecret = s.OPCION === 'CLAVE VERIFICACIONES' || s.secreta;
         const isGeminiModel = s.OPCION === 'MODELO GEMINI';
         const isFactor = s.OPCION === 'FACTOR CAMBIO MONEDA';
@@ -121,6 +164,71 @@ export async function renderConfiguraciones(el) {
           if (input && nuevo != null) input.value = String(nuevo);
         });
       });
+    });
+
+    const logoFile = document.getElementById('logo-file');
+    const logoHint = document.getElementById('logo-file-hint');
+    const logoPreview = document.getElementById('logo-preview');
+    const logoEmpty = document.getElementById('logo-preview-empty');
+
+    logoFile?.addEventListener('change', () => {
+      const file = logoFile.files?.[0];
+      if (!file) {
+        if (logoHint) logoHint.textContent = '';
+        return;
+      }
+      if (logoHint) logoHint.textContent = `${file.name} · ${(file.size / 1024).toFixed(0)} KB`;
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (logoPreview) {
+          logoPreview.src = reader.result;
+          logoPreview.classList.remove('hidden');
+        }
+        logoEmpty?.classList.add('hidden');
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById('logo-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const file = logoFile?.files?.[0];
+      if (!file) {
+        toast('Selecciona una imagen de logo', 'error');
+        return;
+      }
+      const btn = e.target.querySelector('[type=submit]');
+      if (btn) btn.disabled = true;
+      try {
+        const fd = new FormData();
+        fd.append('logo', file);
+        await api.settings.uploadLogo(fd);
+        toast('Logo de empresa guardado', 'success');
+        paint();
+      } catch (err) {
+        toast(err.message, 'error');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+
+    document.getElementById('btn-logo-remove')?.addEventListener('click', async () => {
+      const ask = await window.Swal?.fire({
+        icon: 'warning',
+        title: '¿Quitar logo?',
+        text: 'Se eliminará el logo de empresa de la configuración.',
+        showCancelButton: true,
+        confirmButtonText: 'Quitar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc2626',
+      });
+      if (!ask?.isConfirmed) return;
+      try {
+        await api.settings.removeLogo();
+        toast('Logo eliminado', 'success');
+        paint();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
     });
 
     el.querySelectorAll('.setting-form').forEach((form) => {

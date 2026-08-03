@@ -57,6 +57,9 @@ function listHtml(items) {
           <button class="btn btn-wa btn-pub-wa" type="button" title="Publicar WhatsApp">
             <i class="fa-brands fa-whatsapp"></i> Publicar WhatsApp
           </button>
+          <button class="btn btn-ghost btn-pub-download" type="button" title="Descargar imagen con logo y precio">
+            <i class="fa-solid fa-download"></i> Descargar
+          </button>
           <button class="btn btn-danger btn-icon btn-pub-del" type="button" title="Eliminar">
             <i class="fa-solid fa-trash"></i>
           </button>
@@ -241,6 +244,20 @@ export async function renderPublicaciones(el) {
           toast('Publicado en Estado de WhatsApp', 'success');
         } catch (err) {
           toast(err.message || 'No se pudo publicar en WhatsApp', 'error');
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      });
+
+      row.querySelector('.btn-pub-download')?.addEventListener('click', async () => {
+        const btn = row.querySelector('.btn-pub-download');
+        const cod = row.dataset.cod || id;
+        if (btn) btn.disabled = true;
+        try {
+          await api.publicaciones.downloadImagen(id, cod);
+          toast('Imagen descargada', 'success');
+        } catch (err) {
+          toast(err.message || 'No se pudo descargar la imagen', 'error');
         } finally {
           if (btn) btn.disabled = false;
         }

@@ -1,4 +1,5 @@
 const express = require('express');
+const multer = require('multer');
 const { query } = require('../db');
 const { authRequired, adminRequired } = require('../middleware/auth');
 const {
@@ -9,17 +10,76 @@ const {
 const { consultarTipoCambioMxnPorGtq } = require('../google-finance');
 
 const router = express.Router();
-router.use(authRequired);
 
 const SECRET_OPTION = 'CLAVE VERIFICACIONES';
 const FACTOR_OPTION = 'FACTOR CAMBIO MONEDA';
+const LOGO_OPTION = 'LOGO EMPRESA';
+const MAX_LOGO_BYTES = 2 * 1024 * 1024; // 2 MB
+
+const uploadLogo = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_LOGO_BYTES },
+  fileFilter: (_req, file, cb) => {
+    // PNG/WebP/GIF conservan transparencia; JPEG también permitido
+    const ok = /^image\/(png|webp|gif|jpeg|jpg)$/i.test(file.mimetype);
+    cb(ok ? null : new Error('Solo imágenes PNG, WebP, GIF o JPEG'), ok);
+  },
+});
+
+function parseDataUrl(valor) {
+  const raw = String(valor || '');
+  const m = /^data:(image\/[\w.+-]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(raw);
+  if (!m) return null;
+  return {
+    mime: m[1].toLowerCase(),
+    buffer: Buffer.from(m[2].replace(/\s+/g, ''), 'base64'),
+  };
+}
+
+function hasLogoValue(valor) {
+  return !!(valor && String(valor).startsWith('data:image/'));
+}
+
+/** Público: sirve el logo de empresa (con transparencias PNG/WebP) */
+router.get('/logo', async (_req, res) => {
+  try {
+    const rows = await query('SELECT VALOR FROM SETTINGS WHERE OPCION = ?', [LOGO_OPTION]);
+    if (!rows.length || !hasLogoValue(rows[0].VALOR)) {
+      return res.status(404).json({ error: 'Logo no configurado' });
+    }
+    const parsed = parseDataUrl(rows[0].VALOR);
+    if (!parsed || !parsed.buffer.length) {
+      return res.status(404).json({ error: 'Logo inválido' });
+    }
+    res.set('Content-Type', parsed.mime);
+    res.set('Cache-Control', 'no-store');
+    res.send(parsed.buffer);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener logo' });
+  }
+});
+
+router.use(authRequired);
 
 router.get('/', adminRequired, async (_req, res) => {
   try {
     const rows = await query('SELECT OPCION, VALOR FROM SETTINGS ORDER BY OPCION');
-    const safe = rows.map((r) =>
-      r.OPCION === SECRET_OPTION ? { OPCION: r.OPCION, VALOR: '', secreta: true } : r
-    );
+    const safe = rows.map((r) => {
+      if (r.OPCION === SECRET_OPTION) {
+        return { OPCION: r.OPCION, VALOR: '', secreta: true };
+      }
+      if (r.OPCION === LOGO_OPTION) {
+        return {
+          OPCION: r.OPCION,
+          VALOR: '',
+          isLogo: true,
+          hasLogo: hasLogoValue(r.VALOR),
+          mime: hasLogoValue(r.VALOR) ? parseDataUrl(r.VALOR)?.mime || null : null,
+        };
+      }
+      return r;
+    });
     res.json(safe);
   } catch (err) {
     console.error(err);
@@ -90,11 +150,75 @@ router.put('/factor-cambio', async (req, res) => {
   }
 });
 
+/** Sube / reemplaza logo de empresa (PNG/WebP preferidos por transparencias) */
+router.post('/logo', adminRequired, (req, res) => {
+  uploadLogo.single('logo')(req, res, async (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          error: `El logo no puede superar ${Math.floor(MAX_LOGO_BYTES / (1024 * 1024))} MB`,
+        });
+      }
+      return res.status(400).json({ error: err.message || 'Error al recibir el logo' });
+    }
+    try {
+      if (!req.file?.buffer?.length) {
+        return res.status(400).json({ error: 'Selecciona una imagen de logo' });
+      }
+      const mime = (req.file.mimetype || 'image/png').toLowerCase().replace('image/jpg', 'image/jpeg');
+      const dataUrl = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
+
+      const rows = await query('SELECT OPCION FROM SETTINGS WHERE OPCION = ?', [LOGO_OPTION]);
+      if (!rows.length) {
+        await query('INSERT INTO SETTINGS (OPCION, VALOR) VALUES (?, ?)', [LOGO_OPTION, dataUrl]);
+      } else {
+        await query('UPDATE SETTINGS SET VALOR = ? WHERE OPCION = ?', [dataUrl, LOGO_OPTION]);
+      }
+
+      res.json({
+        ok: true,
+        OPCION: LOGO_OPTION,
+        hasLogo: true,
+        mime,
+        url: `/api/settings/logo?t=${Date.now()}`,
+      });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Error al guardar el logo' });
+    }
+  });
+});
+
+router.delete('/logo', adminRequired, async (_req, res) => {
+  try {
+    const rows = await query('SELECT OPCION FROM SETTINGS WHERE OPCION = ?', [LOGO_OPTION]);
+    if (!rows.length) {
+      await query('INSERT INTO SETTINGS (OPCION, VALOR) VALUES (?, ?)', [LOGO_OPTION, '']);
+    } else {
+      await query('UPDATE SETTINGS SET VALOR = ? WHERE OPCION = ?', ['', LOGO_OPTION]);
+    }
+    res.json({ ok: true, OPCION: LOGO_OPTION, hasLogo: false });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al eliminar el logo' });
+  }
+});
+
 router.get('/:opcion', async (req, res) => {
   try {
     const opcion = decodeURIComponent(req.params.opcion);
     if (opcion === SECRET_OPTION) {
       return res.status(403).json({ error: 'No se puede consultar esta opción directamente' });
+    }
+    if (opcion === LOGO_OPTION) {
+      const rows = await query('SELECT OPCION, VALOR FROM SETTINGS WHERE OPCION = ?', [opcion]);
+      if (!rows.length) return res.status(404).json({ error: 'Opción no encontrada' });
+      return res.json({
+        OPCION: LOGO_OPTION,
+        hasLogo: hasLogoValue(rows[0].VALOR),
+        mime: hasLogoValue(rows[0].VALOR) ? parseDataUrl(rows[0].VALOR)?.mime || null : null,
+        url: hasLogoValue(rows[0].VALOR) ? `/api/settings/logo?t=${Date.now()}` : null,
+      });
     }
     const rows = await query('SELECT OPCION, VALOR FROM SETTINGS WHERE OPCION = ?', [opcion]);
     if (!rows.length) return res.status(404).json({ error: 'Opción no encontrada' });
@@ -108,6 +232,11 @@ router.get('/:opcion', async (req, res) => {
 router.put('/:opcion', adminRequired, async (req, res) => {
   try {
     const opcion = decodeURIComponent(req.params.opcion);
+    if (opcion === LOGO_OPTION) {
+      return res.status(400).json({
+        error: 'Usa POST /api/settings/logo para subir el logo de empresa',
+      });
+    }
     const { VALOR } = req.body;
     if (VALOR === undefined || VALOR === null || String(VALOR).trim() === '') {
       return res.status(400).json({ error: 'VALOR es requerido' });

@@ -85,9 +85,16 @@ async function initDatabase() {
   await query(`
     CREATE TABLE IF NOT EXISTS SETTINGS (
       OPCION VARCHAR(100) NOT NULL PRIMARY KEY,
-      VALOR VARCHAR(255) NOT NULL
+      VALOR LONGTEXT NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+
+  // Migración: VALOR debe soportar logo en base64 (antes VARCHAR(255))
+  try {
+    await query('ALTER TABLE SETTINGS MODIFY VALOR LONGTEXT NOT NULL');
+  } catch (err) {
+    console.warn('No se pudo ampliar SETTINGS.VALOR:', err.message);
+  }
 
   const factor = await query('SELECT OPCION FROM SETTINGS WHERE OPCION = ?', [
     'FACTOR CAMBIO MONEDA',
@@ -121,6 +128,17 @@ async function initDatabase() {
       defaultModel,
     ]);
     console.log('Setting MODELO GEMINI creado.');
+  }
+
+  const logo = await query('SELECT OPCION FROM SETTINGS WHERE OPCION = ?', [
+    'LOGO EMPRESA',
+  ]);
+  if (!logo.length) {
+    await query('INSERT INTO SETTINGS (OPCION, VALOR) VALUES (?, ?)', [
+      'LOGO EMPRESA',
+      '',
+    ]);
+    console.log('Setting LOGO EMPRESA creado.');
   }
 
   // Super usuario

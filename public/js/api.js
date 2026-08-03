@@ -147,6 +147,34 @@ export const api = {
         body: {},
         timeoutMs: 120000,
       }),
+    downloadImagen: async (id, filenameHint = '') => {
+      const token = encodeURIComponent(getToken() || '');
+      const res = await fetch(
+        `/api/publicaciones/${encodeURIComponent(id)}/imagen?token=${token}`,
+        { cache: 'no-store' }
+      );
+      if (!res.ok) {
+        let msg = 'No se pudo descargar la imagen';
+        try {
+          const data = await res.json();
+          if (data?.error) msg = data.error;
+        } catch (_) {
+          /* ignore */
+        }
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safe = String(filenameHint || id).replace(/[^a-zA-Z0-9._-]/g, '_');
+      a.href = url;
+      a.download = `publicacion-${safe}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      return true;
+    },
   },
 
   whatsapp: {
@@ -177,6 +205,10 @@ export const api = {
         method: 'PUT',
         body: { VALOR: String(factor) },
       }),
+    uploadLogo: (formData) =>
+      request('/settings/logo', { method: 'POST', body: formData, timeoutMs: 60000 }),
+    removeLogo: () => request('/settings/logo', { method: 'DELETE' }),
+    logoUrl: () => `/api/settings/logo?t=${Date.now()}`,
   },
 };
 

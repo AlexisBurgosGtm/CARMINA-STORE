@@ -49,7 +49,8 @@ export async function renderLogin(el) {
     <div class="login-hero">
       <div class="w-full max-w-md">
         <div class="text-center mb-8">
-          <img class="login-logo" src="/logo.png" alt="Carmina Store" width="160" height="160" />
+          <img class="login-logo" src="/api/settings/logo" alt="Carmina Store"
+            onerror="this.onerror=null;this.src='/logo.png'" />
           <h1 class="font-display text-4xl font-extrabold text-brand-900 tracking-tight">Carmina Store</h1>
           <p class="text-slate-500 mt-2">Ingresa para administrar tu catálogo</p>
         </div>

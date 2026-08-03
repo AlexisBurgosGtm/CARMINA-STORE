@@ -3,15 +3,37 @@ const { query } = require('../db');
 const { authRequired } = require('../middleware/auth');
 const { downloadFoto } = require('../webdav');
 const { publishStatus, isConnected } = require('../whatsapp');
+const { composePublicacionImage, formatQ } = require('../compose-publicacion');
 
 const router = express.Router();
 router.use(authRequired);
 
-function formatQ(n) {
-  return `Q ${Number(n || 0).toLocaleString('es-GT', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+async function loadPublicacionConFoto(id) {
+  const rows = await query(
+    `SELECT pub.ID, pub.CODPROD, p.DESPROD, p.PRECIO, p.FOTO
+     FROM PUBLICACIONES pub
+     INNER JOIN PRODUCTOS p ON p.CODPROD = pub.CODPROD
+     WHERE pub.ID = ?`,
+    [id]
+  );
+  if (!rows.length) return { error: 'Publicación no encontrada', status: 404 };
+  const item = rows[0];
+  if (!item.FOTO) {
+    return {
+      error: 'El producto no tiene foto. Agrega una foto antes de continuar.',
+      status: 400,
+      item,
+    };
+  }
+  const photoBuffer = await downloadFoto(item.FOTO);
+  if (!photoBuffer) {
+    return {
+      error: 'No se encontró la foto del producto en WebDAV',
+      status: 404,
+      item,
+    };
+  }
+  return { item, photoBuffer };
 }
 
 router.get('/', async (_req, res) => {
@@ -109,7 +131,42 @@ router.post('/:id/publicar', async (req, res) => {
   }
 });
 
-/** Publica en el Estado de WhatsApp del dispositivo vinculado con Baileys */
+/**
+ * Descarga la imagen de publicación ya compuesta (logo + precio).
+ * La foto original del producto no se modifica.
+ */
+router.get('/:id/imagen', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
+    const loaded = await loadPublicacionConFoto(id);
+    if (loaded.error) {
+      return res.status(loaded.status).json({ error: loaded.error });
+    }
+
+    const composed = await composePublicacionImage({
+      photoBuffer: loaded.photoBuffer,
+      precio: loaded.item.PRECIO,
+    });
+
+    const safeName = String(loaded.item.CODPROD || id).replace(/[^a-zA-Z0-9._-]/g, '_');
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'no-store');
+    res.set(
+      'Content-Disposition',
+      `attachment; filename="publicacion-${safeName}.png"`
+    );
+    res.send(composed);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Error al generar la imagen' });
+  }
+});
+
+/** Publica en el Estado de WhatsApp la imagen compuesta (logo + precio) */
 router.post('/:id/whatsapp', async (req, res) => {
   try {
     if (!isConnected()) {
@@ -119,31 +176,18 @@ router.post('/:id/whatsapp', async (req, res) => {
     }
 
     const id = Number(req.params.id);
-    const rows = await query(
-      `SELECT pub.ID, pub.CODPROD, p.DESPROD, p.PRECIO, p.FOTO
-       FROM PUBLICACIONES pub
-       INNER JOIN PRODUCTOS p ON p.CODPROD = pub.CODPROD
-       WHERE pub.ID = ?`,
-      [id]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Publicación no encontrada' });
+    const loaded = await loadPublicacionConFoto(id);
+    if (loaded.error) {
+      return res.status(loaded.status).json({ error: loaded.error });
+    }
 
-    const item = rows[0];
+    const item = loaded.item;
     const caption = `${String(item.DESPROD || '').trim()}\n${formatQ(item.PRECIO)}`;
 
-    let image;
-    if (item.FOTO) {
-      image = await downloadFoto(item.FOTO);
-      if (!image) {
-        return res.status(404).json({
-          error: 'No se encontró la foto del producto en WebDAV',
-        });
-      }
-    } else {
-      return res.status(400).json({
-        error: 'El producto no tiene foto. Agrega una foto antes de publicar en WhatsApp.',
-      });
-    }
+    const image = await composePublicacionImage({
+      photoBuffer: loaded.photoBuffer,
+      precio: item.PRECIO,
+    });
 
     const result = await publishStatus({ image, caption });
     res.json({
