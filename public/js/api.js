@@ -165,10 +165,14 @@ export const api = {
   },
 
   publicaciones: {
-    list: () => request('/publicaciones'),
+    list: (albumId) =>
+      request(
+        albumId != null
+          ? `/publicaciones?album=${encodeURIComponent(albumId)}`
+          : '/publicaciones'
+      ),
     create: (body) => request('/publicaciones', { method: 'POST', body }),
     remove: (id) => request(`/publicaciones/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-    publicar: (id) => request(`/publicaciones/${encodeURIComponent(id)}/publicar`, { method: 'POST', body: {} }),
     publicarWhatsapp: (id) =>
       request(`/publicaciones/${encodeURIComponent(id)}/whatsapp`, {
         method: 'POST',
@@ -203,6 +207,15 @@ export const api = {
       setTimeout(() => URL.revokeObjectURL(url), 1500);
       return true;
     },
+  },
+
+  albumes: {
+    list: () => request('/albumes'),
+    get: (id) => request(`/albumes/${encodeURIComponent(id)}`),
+    create: (body) => request('/albumes', { method: 'POST', body }),
+    update: (id, body) =>
+      request(`/albumes/${encodeURIComponent(id)}`, { method: 'PUT', body }),
+    remove: (id) => request(`/albumes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   },
 
   whatsapp: {

@@ -15,6 +15,99 @@ async function ensureColumn(table, column, definition) {
   if (!Number(rows[0].cnt)) {
     await query(`ALTER TABLE \`${table}\` ADD COLUMN ${definition}`);
     console.log(`Columna ${column} agregada a ${table}.`);
+    return true;
+  }
+  return false;
+}
+
+async function indexExists(table, indexName) {
+  const rows = await query(
+    `SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = ?
+       AND INDEX_NAME = ?`,
+    [table, indexName]
+  );
+  return Number(rows[0].cnt) > 0;
+}
+
+async function fkExists(table, constraintName) {
+  const rows = await query(
+    `SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = ?
+       AND CONSTRAINT_NAME = ?
+       AND CONSTRAINT_TYPE = 'FOREIGN KEY'`,
+    [table, constraintName]
+  );
+  return Number(rows[0].cnt) > 0;
+}
+
+async function migratePublicacionesAlbumes() {
+  const hasIdAlbum = await query(
+    `SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'PUBLICACIONES'
+       AND COLUMN_NAME = 'IDALBUM'`
+  );
+
+  if (!Number(hasIdAlbum[0].cnt)) {
+    await query('ALTER TABLE PUBLICACIONES ADD COLUMN IDALBUM INT NULL AFTER ID');
+    console.log('Columna IDALBUM agregada a PUBLICACIONES.');
+  }
+
+  // Asignar álbum por defecto a filas existentes sin álbum
+  const orphans = await query(
+    'SELECT COUNT(*) AS cnt FROM PUBLICACIONES WHERE IDALBUM IS NULL'
+  );
+  if (Number(orphans[0].cnt) > 0) {
+    let albums = await query('SELECT ID FROM ALBUMES ORDER BY ID ASC LIMIT 1');
+    if (!albums.length) {
+      const created = await query(
+        'INSERT INTO ALBUMES (NOMBRE, FECHA) VALUES (?, NOW())',
+        ['General']
+      );
+      albums = [{ ID: created.insertId }];
+      console.log('Álbum General creado para migrar publicaciones.');
+    }
+    await query('UPDATE PUBLICACIONES SET IDALBUM = ? WHERE IDALBUM IS NULL', [albums[0].ID]);
+  }
+
+  if (await indexExists('PUBLICACIONES', 'uk_pub_codprod')) {
+    await query('ALTER TABLE PUBLICACIONES DROP INDEX uk_pub_codprod');
+    console.log('Índice uk_pub_codprod eliminado.');
+  }
+
+  if (!(await indexExists('PUBLICACIONES', 'uk_pub_album_prod'))) {
+    await query(
+      'ALTER TABLE PUBLICACIONES ADD UNIQUE KEY uk_pub_album_prod (IDALBUM, CODPROD)'
+    );
+    console.log('Índice uk_pub_album_prod creado.');
+  }
+
+  // Si aún hay NULLs no debería; forzar NOT NULL
+  try {
+    await query('ALTER TABLE PUBLICACIONES MODIFY IDALBUM INT NOT NULL');
+  } catch (err) {
+    console.warn('No se pudo marcar IDALBUM NOT NULL:', err.message);
+  }
+
+  if (!(await fkExists('PUBLICACIONES', 'fk_pub_album'))) {
+    try {
+      await query(`
+        ALTER TABLE PUBLICACIONES
+          ADD CONSTRAINT fk_pub_album FOREIGN KEY (IDALBUM)
+          REFERENCES ALBUMES(ID)
+          ON UPDATE CASCADE
+          ON DELETE CASCADE
+      `);
+      console.log('FK fk_pub_album creada.');
+    } catch (err) {
+      console.warn('No se pudo crear fk_pub_album:', err.message);
+    }
   }
 }
 
@@ -70,17 +163,34 @@ async function initDatabase() {
   await ensureColumn('USUARIOS', 'WEBAUTHN', 'WEBAUTHN LONGTEXT NULL');
 
   await query(`
+    CREATE TABLE IF NOT EXISTS ALBUMES (
+      ID INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      NOMBRE VARCHAR(150) NOT NULL,
+      FECHA DATETIME NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS PUBLICACIONES (
       ID INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      IDALBUM INT NOT NULL,
       CODPROD VARCHAR(30) NOT NULL,
       FECHA DATETIME NOT NULL,
-      UNIQUE KEY uk_pub_codprod (CODPROD),
+      UNIQUE KEY uk_pub_album_prod (IDALBUM, CODPROD),
+      CONSTRAINT fk_pub_album FOREIGN KEY (IDALBUM)
+        REFERENCES ALBUMES(ID)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
       CONSTRAINT fk_pub_prod FOREIGN KEY (CODPROD)
         REFERENCES PRODUCTOS(CODPROD)
         ON UPDATE CASCADE
         ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+
+  // Migración: tablas antiguas de PUBLICACIONES sin álbum
+  await migratePublicacionesAlbumes();
+
 
   await query(`
     CREATE TABLE IF NOT EXISTS SETTINGS (

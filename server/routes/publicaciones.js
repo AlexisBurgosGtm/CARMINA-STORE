@@ -10,7 +10,7 @@ router.use(authRequired);
 
 async function loadPublicacionConFoto(id) {
   const rows = await query(
-    `SELECT pub.ID, pub.CODPROD, p.DESPROD, p.PRECIO, p.FOTO
+    `SELECT pub.ID, pub.IDALBUM, pub.CODPROD, p.DESPROD, p.PRECIO, p.FOTO
      FROM PUBLICACIONES pub
      INNER JOIN PRODUCTOS p ON p.CODPROD = pub.CODPROD
      WHERE pub.ID = ?`,
@@ -36,15 +36,23 @@ async function loadPublicacionConFoto(id) {
   return { item, photoBuffer };
 }
 
-router.get('/', async (_req, res) => {
+/** Lista publicaciones; opcional ?album=ID */
+router.get('/', async (req, res) => {
   try {
-    const rows = await query(`
-      SELECT pub.ID, pub.CODPROD, pub.FECHA,
+    const albumId = Number(req.query.album);
+    const hasAlbum = Number.isFinite(albumId) && albumId > 0;
+
+    const rows = await query(
+      `
+      SELECT pub.ID, pub.IDALBUM, pub.CODPROD, pub.FECHA,
              p.DESPROD, p.PRECIO, p.COSTO, p.FOTO
       FROM PUBLICACIONES pub
       INNER JOIN PRODUCTOS p ON p.CODPROD = pub.CODPROD
+      ${hasAlbum ? 'WHERE pub.IDALBUM = ?' : ''}
       ORDER BY pub.FECHA DESC, pub.ID DESC
-    `);
+    `,
+      hasAlbum ? [albumId] : []
+    );
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -55,8 +63,17 @@ router.get('/', async (_req, res) => {
 router.post('/', async (req, res) => {
   try {
     const codprod = String(req.body?.CODPROD || '').trim();
+    const idalbum = Number(req.body?.IDALBUM);
     if (!codprod) {
       return res.status(400).json({ error: 'CODPROD es requerido' });
+    }
+    if (!Number.isFinite(idalbum) || idalbum <= 0) {
+      return res.status(400).json({ error: 'IDALBUM es requerido' });
+    }
+
+    const album = await query('SELECT ID FROM ALBUMES WHERE ID = ?', [idalbum]);
+    if (!album.length) {
+      return res.status(404).json({ error: 'Álbum no encontrado' });
     }
 
     const prod = await query(
@@ -67,18 +84,21 @@ router.post('/', async (req, res) => {
       return res.status(404).json({ error: 'Producto no encontrado en el catálogo' });
     }
 
-    const exists = await query('SELECT ID FROM PUBLICACIONES WHERE CODPROD = ?', [codprod]);
+    const exists = await query(
+      'SELECT ID FROM PUBLICACIONES WHERE IDALBUM = ? AND CODPROD = ?',
+      [idalbum, codprod]
+    );
     if (exists.length) {
-      return res.status(409).json({ error: 'Este producto ya está en publicaciones' });
+      return res.status(409).json({ error: 'Este producto ya está en este álbum' });
     }
 
     const result = await query(
-      'INSERT INTO PUBLICACIONES (CODPROD, FECHA) VALUES (?, NOW())',
-      [codprod]
+      'INSERT INTO PUBLICACIONES (IDALBUM, CODPROD, FECHA) VALUES (?, ?, NOW())',
+      [idalbum, codprod]
     );
 
     const rows = await query(
-      `SELECT pub.ID, pub.CODPROD, pub.FECHA, p.DESPROD, p.PRECIO, p.COSTO, p.FOTO
+      `SELECT pub.ID, pub.IDALBUM, pub.CODPROD, pub.FECHA, p.DESPROD, p.PRECIO, p.COSTO, p.FOTO
        FROM PUBLICACIONES pub
        INNER JOIN PRODUCTOS p ON p.CODPROD = pub.CODPROD
        WHERE pub.ID = ?`,
@@ -105,29 +125,6 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al eliminar publicación' });
-  }
-});
-
-/** Pendiente de implementar la publicación real en redes */
-router.post('/:id/publicar', async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const rows = await query(
-      `SELECT pub.ID, pub.CODPROD, p.DESPROD, p.PRECIO
-       FROM PUBLICACIONES pub
-       INNER JOIN PRODUCTOS p ON p.CODPROD = pub.CODPROD
-       WHERE pub.ID = ?`,
-      [id]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Publicación no encontrada' });
-    res.status(501).json({
-      error: 'Publicar en redes sociales aún no está implementado',
-      pendiente: true,
-      item: rows[0],
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al publicar' });
   }
 });
 
